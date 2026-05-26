@@ -20,7 +20,10 @@ app.use('/api/journal', require('./routes/journal.routes'));
 app.use('/api/messages', require('./routes/message.routes'));
 app.use('/api/care-events', require('./routes/care_events.routes'));
 app.use('/api/health-records', require('./routes/health_records.routes'));
-app.use('/api/ai', require('./routes/ai.routes'));
+app.use('/api/ai',       require('./routes/ai.routes'));
+app.use('/api/guardian',    require('./routes/guardian.routes'));
+app.use('/api/health-card', require('./routes/health-card.routes'));
+app.use('/admin',           require('./routes/admin.routes'));
 
 // Health check
 app.get('/api/health', (req, res) => {

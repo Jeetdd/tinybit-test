@@ -7,11 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "tinybittest",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.tinybit.app",
-      "usesAppleSignIn": true
-    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -20,7 +15,22 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "t.i.n.y.b.i.t.E.C"
+      "package": "t.i.n.y.b.i.t.E.C",
+      "usesCleartextTraffic": true,
+      "softwareKeyboardLayoutMode": "resize",
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_ANDROID_API_KEY"
+        }
+      }
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tinybit.app",
+      "usesAppleSignIn": true,
+      "config": {
+        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_IOS_API_KEY"
+      }
     },
     "web": {
       "output": "static",
@@ -31,7 +41,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/TinyBit_LOGO.png",
+          "image": "./assets/images/TinyBit_LOGO_New.png",
           "imageWidth": 300,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -51,11 +61,27 @@
         }
       ],
       "expo-web-browser",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow TinyBit to access your location so family can see where you are.",
+          "locationWhenInUsePermission": "Allow TinyBit to access your location so family can see where you are.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2B3C86",
+          "sounds": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false
     },
     "extra": {
       "router": {},

@@ -19,10 +19,12 @@ export default function CountryPickerModal({
   visible,
   onSelect,
   onClose,
+  showDial = true,
 }: {
   visible: boolean;
   onSelect: (c: Country) => void;
   onClose: () => void;
+  showDial?: boolean;
 }) {
   const [search, setSearch] = useState("");
 
@@ -78,7 +80,7 @@ export default function CountryPickerModal({
               >
                 <Text style={styles.flag}>{item.flag}</Text>
                 <Text style={styles.countryName}>{item.name}</Text>
-                <Text style={styles.dialCode}>{item.dial}</Text>
+                {showDial && <Text style={styles.dialCode}>{item.dial}</Text>}
               </Pressable>
             )}
             ItemSeparatorComponent={() => <View style={styles.separator} />}

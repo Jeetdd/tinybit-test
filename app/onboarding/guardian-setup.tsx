@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
   StatusBar, TextInput, Image, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -9,6 +10,8 @@ import { useRouter, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../context/AuthContext";
+import CountryPickerModal from "../../components/CountryPickerModal";
+import { DEFAULT_COUNTRY, type Country } from "../../constants/countries";
 
 const C = {
   navy:     "#1A2E6A",
@@ -103,11 +106,12 @@ function Step1({
 // ─── Step 2: Health Information ───────────────────────────────────────────────
 function Step2({
   dob, setDob, blood, setBlood,
-  emergency, setEmergency, conditions, toggleCond,
+  emergency, setEmergency, phoneCountry, openCountryPicker, conditions, toggleCond,
 }: {
   dob: string; setDob: (v: string) => void;
   blood: string; setBlood: (v: string) => void;
   emergency: string; setEmergency: (v: string) => void;
+  phoneCountry: Country; openCountryPicker: () => void;
   conditions: string[]; toggleCond: (c: string) => void;
 }) {
   return (
@@ -139,9 +143,10 @@ function Step2({
       <View style={f.group}>
         <Text style={f.label}>Emergency Contact</Text>
         <View style={f.wrap}>
-          <View style={s2.dialBox}>
-            <Text style={s2.dialText}>+91</Text>
-          </View>
+          <Pressable style={s2.dialBox} onPress={openCountryPicker}>
+            <Text style={s2.dialText}>{phoneCountry.flag} {phoneCountry.dial}</Text>
+            <Ionicons name="chevron-down" size={14} color={C.muted} />
+          </Pressable>
           <TextInput
             style={[f.input, { flex: 1 }]}
             placeholder="Mobile number"
@@ -180,11 +185,12 @@ function Step2({
 type Parent = { name: string; mobile: string; relation: string };
 
 function Step3({
-  parents, updateParent, addParent,
+  parents, updateParent, addParent, phoneCountry, openCountryPicker,
 }: {
   parents: Parent[];
   updateParent: (i: number, field: keyof Parent, val: string) => void;
   addParent: () => void;
+  phoneCountry: Country; openCountryPicker: () => void;
 }) {
   return (
     <Animated.View entering={FadeInDown.duration(360)}>
@@ -203,9 +209,10 @@ function Step3({
           <View style={f.group}>
             <Text style={f.label}>Parent's Mobile No.</Text>
             <View style={f.wrap}>
-              <View style={s2.dialBox}>
-                <Text style={s2.dialText}>+91</Text>
-              </View>
+              <Pressable style={s2.dialBox} onPress={openCountryPicker}>
+                <Text style={s2.dialText}>{phoneCountry.flag} {phoneCountry.dial}</Text>
+                <Ionicons name="chevron-down" size={14} color={C.muted} />
+              </Pressable>
               <TextInput
                 style={[f.input, { flex: 1 }]}
                 placeholder="10-digit mobile number"
@@ -296,6 +303,8 @@ export default function GuardianSetupScreen() {
   const [dob,       setDob]       = useState("");
   const [blood,     setBlood]     = useState("");
   const [emergency, setEmergency] = useState("");
+  const [phoneCountry, setPhoneCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [phonePickerVisible, setPhonePickerVisible] = useState(false);
   const [conditions, setConditions] = useState<string[]>([]);
 
   // Step 3 state
@@ -328,7 +337,7 @@ export default function GuardianSetupScreen() {
   };
 
   return (
-    <View style={gs.root}>
+    <KeyboardAvoidingView style={gs.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
@@ -373,6 +382,8 @@ export default function GuardianSetupScreen() {
               dob={dob} setDob={setDob}
               blood={blood} setBlood={setBlood}
               emergency={emergency} setEmergency={setEmergency}
+              phoneCountry={phoneCountry}
+              openCountryPicker={() => setPhonePickerVisible(true)}
               conditions={conditions} toggleCond={toggleCond}
             />
           )}
@@ -381,6 +392,8 @@ export default function GuardianSetupScreen() {
               parents={parents}
               updateParent={updateParent}
               addParent={addParent}
+              phoneCountry={phoneCountry}
+              openCountryPicker={() => setPhonePickerVisible(true)}
             />
           )}
           {step === 4 && <Step4 />}
@@ -411,7 +424,13 @@ export default function GuardianSetupScreen() {
           </Pressable>
         </View>
       </View>
-    </View>
+
+      <CountryPickerModal
+        visible={phonePickerVisible}
+        onSelect={setPhoneCountry}
+        onClose={() => setPhonePickerVisible(false)}
+      />
+    </KeyboardAvoidingView>
   );
 }
 

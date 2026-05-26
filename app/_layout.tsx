@@ -1,52 +1,175 @@
 import 'react-native-url-polyfill/auto';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
 // StatusBar is managed per-screen via expo-status-bar
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
+import { setupGlobalErrorHandlers } from '../utils/logger';
+
+// Install global error handlers as early as possible
+setupGlobalErrorHandlers();
 
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { LanguageProvider, useLanguage } from '../context/LanguageContext';
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { View } from 'react-native';
 import AppSplashScreen from '../components/AppSplashScreen';
+import { supabase } from '../utils/supabase';
+import { deriveNamesFromUser } from '../utils/profileName';
+import { registerPushToken } from '../services/pushNotifications';
 
 
-export const unstable_settings = {
-  initialRouteName: 'onboarding',
-};
+// Onboarding screens that are safe to remain on while profile is being built
+const PROFILE_SETUP_SCREENS = new Set([
+  'role', 'name', 'about', 'guardian-about', 'add-parent', 'medical', 'otp', 'step1', 'register', 'login', 'signup'
+]);
+
+async function setupAudio() {
+  try {
+    const { Audio } = require('expo-audio');
+    if (Audio && Audio.setAudioModeAsync) {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+    }
+  } catch (e) {
+    console.log('[RootLayout] Audio Setup Error:', e);
+  }
+}
+
+async function setupNotifications() {
+  if (Constants.executionEnvironment === 'storeClient') return;
+  try {
+    const { Platform } = require('react-native');
+    if (Platform.OS !== 'android') return;
+    const Notifications = require('expo-notifications');
+    if (Notifications && Notifications.setNotificationChannelAsync) {
+      await Notifications.setNotificationChannelAsync('medicine-reminders', {
+        name: 'Medicine Reminders',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#2B3C86',
+        sound: 'default',
+      });
+    }
+  } catch (e) {
+    console.log('[RootLayout] Notifications Setup Error:', e);
+  }
+}
 
 function RootLayoutNav() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, profile } = useAuth();
   const { nightMode } = useLanguage();
   const segments = useSegments();
   const router = useRouter();
 
+  console.log('[DEBUG] RootLayoutNav state:', { 
+    user: user?.id, 
+    isLoading, 
+    profileRole: profile?.role, 
+    segments,
+  });
+
+  // Fallback: handle implicit-flow OAuth redirect when openAuthSessionAsync
+  // doesn't intercept it. Only handles access_token= (implicit); PKCE code=
+  // is handled exclusively by oauth.ts to avoid double-consumption.
   useEffect(() => {
-    // Enable iOS recording globally
-    setupAudio();
+    let active = true;
 
-    if (isLoading) return;
-    const inAuthGroup = segments[0] === '(tabs)';
-    if (!user && inAuthGroup) {
-      router.replace('/onboarding');
-    }
-  }, [user, isLoading, segments]);
+    const handleAuthUrl = async (url: string) => {
+      if (!url.includes('access_token=')) return;
+      try {
+        const separator = url.includes('#') ? '#' : '?';
+        const fragment = url.split(separator)[1] ?? '';
+        const p = new URLSearchParams(fragment);
+        const accessToken = p.get('access_token');
+        const refreshToken = p.get('refresh_token') ?? '';
+        if (!accessToken) return;
+        const { data } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        const session = data.session;
+        if (!session?.user) return;
 
-  const setupAudio = async () => {
-    try {
-      const { Audio } = require('expo-audio');
-      if (Audio && Audio.setAudioModeAsync) {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!active) return; // effect cleaned up before async resolved
+        if (profileData?.role) {
+          router.replace('/(tabs)');
+        } else {
+          const names = deriveNamesFromUser(session.user);
+          router.replace({
+            pathname: '/onboarding/role' as any,
+            params: { firstName: names.firstName, lastName: names.lastName, email: session.user.email ?? '' },
+          });
+        }
+      } catch (err) {
+        console.log('[RootLayout] Deep Link Auth Error:', err);
       }
-    } catch (e) {
-      console.log('Global Audio Setup Error:', e);
+    };
+
+    const sub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
+    Linking.getInitialURL().then(url => { if (active && url) handleAuthUrl(url); });
+    return () => { active = false; sub.remove(); };
+  }, []);
+
+  // Run one-time setup
+  useEffect(() => {
+    setupAudio();
+    setupNotifications();
+  }, []);
+
+  // Register push token once user is fully onboarded
+  useEffect(() => {
+    if (user?.id && profile?.role) {
+      registerPushToken(user.id);
     }
-  };
+  }, [user?.id, profile?.role]);
+
+  // Handle OAuth and routing
+  useEffect(() => {
+    if (isLoading) return;
+
+    const inTabs         = segments[0] === '(tabs)';
+    const inOnboarding    = segments[0] === 'onboarding';
+    const currentScreen  = segments[1] as string | undefined;
+
+    if (!user) {
+      if (inTabs) {
+        // Defer navigation one tick so target components are fully mounted
+        setTimeout(() => router.replace('/onboarding'), 0);
+      }
+      return;
+    }
+
+    // Auth logic for logged-in users
+    if (profile !== null) {
+      if (!profile?.role) {
+        const onSetupScreen = inOnboarding && PROFILE_SETUP_SCREENS.has(currentScreen ?? '');
+        if (!onSetupScreen) {
+          const names = deriveNamesFromUser(user);
+          setTimeout(() => router.replace({
+            pathname: '/onboarding/role' as any,
+            params: {
+              firstName: names.firstName,
+              lastName: names.lastName,
+              email: user.email ?? '',
+            },
+          }), 0);
+        }
+      } else if (inOnboarding && profile?.firstName) {
+        const onSetupScreen = PROFILE_SETUP_SCREENS.has(currentScreen ?? '');
+        if (!onSetupScreen) {
+          setTimeout(() => router.replace('/(tabs)'), 0);
+        }
+      }
+    }
+  }, [user, isLoading, profile, segments]);
 
   if (isLoading) {
     return <AppSplashScreen />;
@@ -62,9 +185,15 @@ function RootLayoutNav() {
       <Stack>
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
         <Stack.Screen name="memory-history" options={{ headerShown: false }} />
         <Stack.Screen name="mood-lift" options={{ headerShown: false }} />
         <Stack.Screen name="mood-library" options={{ headerShown: false }} />
+        {/* New feature screens */}
+        <Stack.Screen name="weather" options={{ headerShown: false }} />
+        <Stack.Screen name="calorie-calculator" options={{ headerShown: false }} />
+        <Stack.Screen name="help" options={{ headerShown: false }} />
       </Stack>
     </ThemeProvider>
   );

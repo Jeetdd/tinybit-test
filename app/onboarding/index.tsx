@@ -1,9 +1,10 @@
 import { View, Text, StyleSheet, Pressable, Image, Dimensions, StatusBar } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useEffect } from "react";
 import { LinearGradient } from "expo-linear-gradient";
+import { useAuth } from "../../context/AuthContext";
 
 const { width } = Dimensions.get('window');
 
@@ -18,17 +19,24 @@ const C = {
 
 export default function Splash() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { user, profile, isLoading } = useAuth();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      router.replace("/onboarding/step1");
-    }, 4500); 
-    return () => clearTimeout(timer);
-  }, [router]);
+    // We let RootLayoutNav handle the heavy lifting for logged-in users.
+    // This splash screen only needs to decide if it should move an 
+    // UNKNOWN user to signup after the logo shows.
+    if (isLoading) return;
+
+    if (!user) {
+      const timer = setTimeout(() => {
+        router.replace("/onboarding/signup");
+      }, 4000); 
+      return () => clearTimeout(timer);
+    }
+  }, [router, user, isLoading]);
 
   const handleNext = () => {
-    router.replace("/onboarding/step1");
+    router.replace("/onboarding/signup");
   };
 
   return (
@@ -47,7 +55,7 @@ export default function Splash() {
             {/* Logo Area */}
             <Animated.View entering={FadeInDown.duration(1000).delay(200)} style={styles.logoContainer}>
               <Image
-                source={require("../../assets/images/logo.png")}
+                source={require("../../assets/images/TinyBit_LOGO_New.png")}
                 style={styles.logoImage}
                 resizeMode="contain"
               />

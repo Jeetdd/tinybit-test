@@ -58,7 +58,6 @@ export type ProfileUpdate = Partial<
     | 'settings'
     | 'last_login'
     | 'last_active'
-    | 'device_info'
   >
 > & { device_info?: object[] };
 

@@ -1,236 +1,286 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, StatusBar,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInDown } from "react-native-reanimated";
-import { useRouter, Stack } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
+  ActivityIndicator, Alert, Pressable, ScrollView,
+  StatusBar, StyleSheet, Text, View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../utils/supabase';
 
-const C = {
-  navy:     "#1A2E6A",
-  navyDark: "#111D44",
-  white:    "#FFFFFF",
-  bg:       "#EEF2F7",
-  muted:    "#8A9BB0",
-  accent:   "#37B1E6",
-  border:   "#E4EBF2",
-};
-
-type NotifType = "medicine" | "family" | "checkin" | "sathi" | "sos" | "health";
-
-interface Notif {
+type Notif = {
   id: string;
-  type: NotifType;
+  type: string;
   title: string;
   body: string;
-  time: string;
   read: boolean;
-}
-
-const TYPE_META: Record<NotifType, { icon: string; color: string; bg: string }> = {
-  medicine: { icon: "medkit-outline",       color: "#F59E0B", bg: "#FFF8E7" },
-  family:   { icon: "people-outline",       color: "#16A34A", bg: "#F0FFF4" },
-  checkin:  { icon: "checkmark-done-outline",color: "#7C3AED", bg: "#F5F0FF" },
-  sathi:    { icon: "chatbubble-ellipses-outline", color: "#37B1E6", bg: "#EFF8FF" },
-  sos:      { icon: "warning-outline",      color: "#DC2626", bg: "#FFF0F0" },
-  health:   { icon: "heart-outline",        color: "#EC4899", bg: "#FFF0F8" },
+  created_at: string;
+  data: Record<string, unknown>;
 };
 
-const INITIAL: Notif[] = [
-  // Today
-  { id: "1",  type: "medicine", title: "Medicine Reminder",        body: "Time to take your evening dose — Metformin 500mg.",         time: "6:00 PM",   read: false },
-  { id: "2",  type: "sathi",    title: "Sathi has a tip for you",  body: "Your step count is lower today. A short walk can help!",    time: "4:30 PM",   read: false },
-  { id: "3",  type: "family",   title: "Message from Priya",       body: "\"How are you feeling today, Dad? Call me when you can!\"", time: "2:15 PM",   read: false },
-  { id: "4",  type: "checkin",  title: "Daily Check-In Pending",   body: "You haven't completed today's health check-in yet.",        time: "10:00 AM",  read: true  },
-  // Yesterday
-  { id: "5",  type: "medicine", title: "Morning Dose Reminder",    body: "Don't forget — Atorvastatin 10mg with breakfast.",          time: "Yesterday", read: true  },
-  { id: "6",  type: "health",   title: "Blood Sugar Alert",        body: "Yesterday's reading was slightly high. Consult your doctor.",time: "Yesterday", read: true  },
-  { id: "7",  type: "family",   title: "Voice message from Rahul", body: "Rahul sent you a voice message. Tap to listen.",            time: "Yesterday", read: true  },
-  // Earlier
-  { id: "8",  type: "sos",      title: "SOS Test Alert",           body: "Your SOS test was sent successfully to family.",            time: "Mon",       read: true  },
-  { id: "9",  type: "checkin",  title: "Weekly Summary Ready",     body: "Your weekly health summary is ready. Great job this week!", time: "Sun",       read: true  },
-  { id: "10", type: "sathi",    title: "Sathi remembers",          body: "It's been 3 days since your last journal entry.",           time: "Sat",       read: true  },
-];
+const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
+  medicine_taken:         { icon: 'checkmark-circle',  color: '#16A34A', bg: '#DCFCE7' },
+  medicine_added:         { icon: 'add-circle',        color: '#2563EB', bg: '#DBEAFE' },
+  medicine_updated:       { icon: 'create',            color: '#D97706', bg: '#FEF3C7' },
+  medicine_deleted:       { icon: 'trash',             color: '#DC2626', bg: '#FEE2E2' },
+  health_record_uploaded: { icon: 'folder-open',       color: '#7C3AED', bg: '#EDE9FE' },
+  check_in_done:          { icon: 'clipboard',         color: '#0891B2', bg: '#CFFAFE' },
+  care_event_added:       { icon: 'calendar',          color: '#F59E0B', bg: '#FEF3C7' },
+  voice_message:          { icon: 'mic',               color: '#DB2777', bg: '#FCE7F3' },
+  sos_triggered:          { icon: 'warning',           color: '#DC2626', bg: '#FEE2E2' },
+};
 
-const GROUPS = [
-  { label: "Today",     ids: ["1","2","3","4"] },
-  { label: "Yesterday", ids: ["5","6","7"] },
-  { label: "Earlier",   ids: ["8","9","10"] },
-];
+const DEFAULT_META = { icon: 'notifications' as const, color: '#64748B', bg: '#F1F5F9' };
+
+function timeAgo(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60)    return 'Just now';
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function isToday(iso: string) {
+  const d = new Date(iso);
+  const t = new Date();
+  return (
+    d.getDate()     === t.getDate()     &&
+    d.getMonth()    === t.getMonth()    &&
+    d.getFullYear() === t.getFullYear()
+  );
+}
 
 export default function NotificationsScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [notifs, setNotifs] = useState<Notif[]>(INITIAL);
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
+  const { user } = useAuth();
 
-  const unreadCount = notifs.filter(n => !n.read).length;
+  const [notifs,  setNotifs]  = useState<Notif[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const markRead = (id: string) =>
+  const load = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(60);
+      if (!error && data) setNotifs(data as Notif[]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`notif-screen-${user.id}`)
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => void load(),
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(ch); };
+  }, [user?.id]);
+
+  const markRead = async (id: string) => {
     setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    await supabase.from('notifications').update({ read: true }).eq('id', id);
+  };
 
-  const markAllRead = () =>
+  const markAllRead = async () => {
+    if (!user?.id) return;
     setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('read', false);
+  };
+
+  const deleteNotif = async (id: string) => {
+    setNotifs(prev => prev.filter(n => n.id !== id));
+    await supabase.from('notifications').delete().eq('id', id);
+  };
+
+  const clearAll = () => {
+    Alert.alert('Clear All', 'Remove all notifications?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear', style: 'destructive',
+        onPress: async () => {
+          if (!user?.id) return;
+          setNotifs([]);
+          await supabase.from('notifications').delete().eq('user_id', user.id);
+        },
+      },
+    ]);
+  };
+
+  const today   = notifs.filter(n =>  isToday(n.created_at));
+  const earlier = notifs.filter(n => !isToday(n.created_at));
+  const unread  = notifs.filter(n => !n.read).length;
 
   return (
     <View style={s.root}>
-      <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Header */}
       <LinearGradient
-        colors={["#1B3A5C", "#2B7FC0"]}
+        colors={['#1B3A5C', '#2B7FC0']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[s.header, { paddingTop: insets.top + 12 }]}
       >
-        <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="chevron-back" size={20} color={C.navyDark} />
+        <Pressable
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
+          style={s.backBtn}
+        >
+          <Ionicons name="chevron-back" size={20} color="#1B3A5C" />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>Notifications</Text>
-          {unreadCount > 0 && (
-            <Text style={s.headerSub}>{unreadCount} unread</Text>
+          {unread > 0 && (
+            <Text style={s.headerSub}>{unread} unread</Text>
           )}
         </View>
-        {unreadCount > 0 && (
-          <Pressable onPress={markAllRead} style={s.markAllBtn}>
-            <Text style={s.markAllText}>Mark all read</Text>
-          </Pressable>
-        )}
+        <View style={s.headerActions}>
+          {unread > 0 && (
+            <Pressable onPress={markAllRead} style={s.headerBtn}>
+              <Text style={s.headerBtnText}>Mark all read</Text>
+            </Pressable>
+          )}
+          {notifs.length > 0 && (
+            <Pressable onPress={clearAll} style={s.headerBtn}>
+              <Ionicons name="trash-outline" size={18} color="rgba(255,255,255,0.8)" />
+            </Pressable>
+          )}
+        </View>
       </LinearGradient>
 
-      {/* Sheet */}
-      <View style={s.sheet}>
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 48 }} size="large" color="#2B7FC0" />
+      ) : notifs.length === 0 ? (
+        <View style={s.empty}>
+          <View style={s.emptyIcon}>
+            <Ionicons name="notifications-off-outline" size={44} color="#94A3B8" />
+          </View>
+          <Text style={s.emptyTitle}>All caught up!</Text>
+          <Text style={s.emptySub}>
+            No notifications yet. Activity from you and your family will appear here in real time.
+          </Text>
+        </View>
+      ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 100 }]}
+          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 24 }]}
         >
-          {GROUPS.map((group, gi) => {
-            const items = notifs.filter(n => group.ids.includes(n.id));
-            return (
-              <Animated.View key={group.label} entering={FadeInDown.delay(gi * 80)}>
-                <Text style={s.groupLabel}>{group.label}</Text>
-                {items.map((notif, i) => {
-                  const meta = TYPE_META[notif.type];
-                  return (
-                    <Pressable
-                      key={notif.id}
-                      style={[s.card, !notif.read && s.cardUnread]}
-                      onPress={() => markRead(notif.id)}
-                    >
-                      {/* Icon */}
-                      <View style={[s.iconCircle, { backgroundColor: meta.bg }]}>
-                        <Ionicons name={meta.icon as any} size={22} color={meta.color} />
-                      </View>
-
-                      {/* Content */}
-                      <View style={s.cardBody}>
-                        <View style={s.cardTop}>
-                          <Text style={[s.cardTitle, !notif.read && s.cardTitleUnread]} numberOfLines={1}>
-                            {notif.title}
-                          </Text>
-                          <Text style={s.cardTime}>{notif.time}</Text>
-                        </View>
-                        <Text style={s.cardDesc} numberOfLines={2}>{notif.body}</Text>
-                      </View>
-
-                      {/* Unread dot */}
-                      {!notif.read && <View style={s.unreadDot} />}
-                    </Pressable>
-                  );
-                })}
-              </Animated.View>
-            );
-          })}
-
-          {unreadCount === 0 && (
-            <Animated.View entering={FadeInDown} style={s.emptyWrap}>
-              <View style={s.emptyIcon}>
-                <Ionicons name="notifications-off-outline" size={40} color={C.muted} />
-              </View>
-              <Text style={s.emptyTitle}>You're all caught up!</Text>
-              <Text style={s.emptySub}>No new notifications right now.</Text>
-            </Animated.View>
+          {today.length > 0 && (
+            <>
+              <Text style={s.groupLabel}>Today</Text>
+              {today.map(n => (
+                <NotifRow key={n.id} n={n} onRead={markRead} onDelete={deleteNotif} />
+              ))}
+            </>
+          )}
+          {earlier.length > 0 && (
+            <>
+              <Text style={s.groupLabel}>Earlier</Text>
+              {earlier.map(n => (
+                <NotifRow key={n.id} n={n} onRead={markRead} onDelete={deleteNotif} />
+              ))}
+            </>
           )}
         </ScrollView>
-      </View>
+      )}
     </View>
   );
 }
 
+function NotifRow({
+  n, onRead, onDelete,
+}: {
+  n: Notif;
+  onRead: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const meta = TYPE_META[n.type] ?? DEFAULT_META;
+  return (
+    <Pressable
+      style={[s.row, !n.read && s.rowUnread]}
+      onPress={() => { if (!n.read) onRead(n.id); }}
+    >
+      <View style={[s.iconCircle, { backgroundColor: meta.bg }]}>
+        <Ionicons name={meta.icon} size={22} color={meta.color} />
+      </View>
+      <View style={s.rowContent}>
+        <View style={s.rowTop}>
+          <Text style={[s.rowTitle, !n.read && s.rowTitleUnread]} numberOfLines={1}>
+            {n.title}
+          </Text>
+          <Text style={s.rowTime}>{timeAgo(n.created_at)}</Text>
+        </View>
+        <Text style={s.rowBody} numberOfLines={2}>{n.body}</Text>
+      </View>
+      {!n.read && <View style={s.unreadDot} />}
+      <Pressable hitSlop={10} onPress={() => onDelete(n.id)} style={s.deleteBtn}>
+        <Ionicons name="close" size={16} color="#94A3B8" />
+      </Pressable>
+    </Pressable>
+  );
+}
+
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, backgroundColor: '#EEF2F7' },
 
   header: {
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 18, paddingBottom: 28, gap: 14,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 18, paddingBottom: 18, gap: 14,
   },
   backBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    justifyContent: "center", alignItems: "center",
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center',
   },
-  headerTitle: { fontSize: 22, fontWeight: "900", color: C.white },
-  headerSub:   { fontSize: 13, fontWeight: "600", color: "rgba(255,255,255,0.7)", marginTop: 2 },
-  markAllBtn: {
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
+  headerTitle:   { fontSize: 20, fontWeight: '900', color: '#fff' },
+  headerSub:     { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.7)', marginTop: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerBtn: {
+    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 14,
+    paddingHorizontal: 10, paddingVertical: 6,
   },
-  markAllText: { fontSize: 13, fontWeight: "700", color: C.white },
+  headerBtnText: { fontSize: 12, fontWeight: '800', color: '#fff' },
 
-  sheet: {
-    flex: 1, marginTop: -22,
-    backgroundColor: C.bg,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    overflow: "hidden",
-  },
-
-  scroll: { paddingTop: 20, paddingHorizontal: 16 },
-
+  list:       { padding: 16, gap: 10 },
   groupLabel: {
-    fontSize: 13, fontWeight: "800", color: C.muted,
-    textTransform: "uppercase", letterSpacing: 1,
-    marginBottom: 10, marginTop: 6,
+    fontSize: 13, fontWeight: '800', color: '#8A9BB0',
+    letterSpacing: 0.5, marginTop: 8, marginBottom: 4, marginLeft: 4,
   },
 
-  card: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: C.white, borderRadius: 18,
-    padding: 14, marginBottom: 10, gap: 12,
-    boxShadow: "0px 2px 8px rgba(0,0,0,0.06)", elevation: 2,
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#fff', borderRadius: 18, padding: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 6, elevation: 1,
   },
-  cardUnread: {
-    borderLeftWidth: 3, borderLeftColor: C.accent,
-  },
+  rowUnread:      { backgroundColor: '#F0F7FF', borderLeftWidth: 3, borderLeftColor: '#2B7FC0' },
+  iconCircle:     { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  rowContent:     { flex: 1 },
+  rowTop:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },
+  rowTitle:       { fontSize: 14, fontWeight: '700', color: '#334155', flex: 1, marginRight: 8 },
+  rowTitleUnread: { fontWeight: '900', color: '#1A2E6A' },
+  rowBody:        { fontSize: 12, fontWeight: '500', color: '#64748B', lineHeight: 17 },
+  rowTime:        { fontSize: 11, fontWeight: '600', color: '#94A3B8', flexShrink: 0 },
+  unreadDot:      { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2B7FC0', flexShrink: 0 },
+  deleteBtn:      { padding: 4, flexShrink: 0 },
 
-  iconCircle: {
-    width: 50, height: 50, borderRadius: 25,
-    justifyContent: "center", alignItems: "center",
-    flexShrink: 0,
-  },
-
-  cardBody:  { flex: 1 },
-  cardTop:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
-  cardTitle: { fontSize: 15, fontWeight: "700", color: C.muted, flex: 1, marginRight: 8 },
-  cardTitleUnread: { color: C.navyDark, fontWeight: "800" },
-  cardTime:  { fontSize: 12, fontWeight: "600", color: C.muted, flexShrink: 0 },
-  cardDesc:  { fontSize: 13, fontWeight: "500", color: C.muted, lineHeight: 18 },
-
-  unreadDot: {
-    width: 10, height: 10, borderRadius: 5,
-    backgroundColor: C.accent, flexShrink: 0,
-  },
-
-  emptyWrap: {
-    alignItems: "center", marginTop: 80,
-  },
-  emptyIcon: {
-    width: 90, height: 90, borderRadius: 45,
-    backgroundColor: C.white, justifyContent: "center", alignItems: "center",
-    marginBottom: 20,
-    boxShadow: "0px 2px 12px rgba(0,0,0,0.07)", elevation: 3,
-  },
-  emptyTitle: { fontSize: 20, fontWeight: "900", color: C.navyDark, marginBottom: 8 },
-  emptySub:   { fontSize: 14, fontWeight: "500", color: C.muted },
+  empty:      { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
+  emptyIcon:  { width: 88, height: 88, borderRadius: 44, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  emptyTitle: { fontSize: 20, fontWeight: '900', color: '#1A2E6A' },
+  emptySub:   { fontSize: 14, fontWeight: '500', color: '#64748B', textAlign: 'center', lineHeight: 22 },
 });

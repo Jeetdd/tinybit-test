@@ -1,26 +1,146 @@
 import { Ionicons } from "@expo/vector-icons";
-import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioPlayer, useAudioRecorder } from 'expo-audio';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   Dimensions,
   Image,
+  Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuth } from "../../context/AuthContext";
-import { sathiAi } from "../../utils/openai";
-import { supabase } from "../../utils/supabase";
-import SideMenu from "../../components/SideMenu";
 import GuardianHomeScreen from "../../components/GuardianHomeScreen";
+import GuardianInviteCard from "../../components/GuardianInviteCard";
+import HealthQRWidget from "../../components/HealthQRWidget";
+import SideMenu from "../../components/SideMenu";
+import TalkToSathiModal from "../../components/TalkToSathiModal";
+import { useAuth } from "../../context/AuthContext";
+import type { Language } from "../../context/LanguageContext";
+import { useLanguage } from "../../context/LanguageContext";
+import { scaleStyles } from "../../utils/scaleStyles";
+import { getCountryEmergency } from "../../constants/emergencyNumbers";
+import { getPreferredFirstName, truncateName } from "../../utils/profileName";
+import { supabase } from "../../utils/supabase";
+import { useUnreadNotifCount } from "../../services/notifications";
+
+type HomeT = {
+  hello: string; sathiAiSay: string; voiceCompanion: string;
+  talkToSathi: string; stop: string; thinking: string; listening: string;
+  todayAtAGlance: string; mood: string; medicine: string; streak: string;
+  emergencyHelp: string; guardian: string; medicalService: string; pressFor3Sec: string;
+  todaysMedicine: string; viewAll: string; dailyMedicines: string; taken: string; complete: string;
+  whatWouldYouLike: string; allFeatures: string;
+  healthVault: string; careCalendar: string; memoryJournal: string;
+  mindGames: string; moodLift: string; dailyCheckIn: string;
+  todaysSurprise: string; memoryPrompt: string; recordYourMemory: string;
+  yourStreak: string; dayStreak: string; onTheRightTrack: string;
+  voiceMessageFrom: string; tapToListen: string; playRecording: string;
+  liveLocation: string; sharingWithFamily: string; canSeeYourLocation: string; active: string;
+  dueAt: string; priority: string;
+};
+
+const HT: Partial<Record<Language, HomeT>> = {
+  English: {
+    hello: "Hello,", sathiAiSay: "Sathi Ai Say...", voiceCompanion: "Your Voice AI companion",
+    talkToSathi: "Talk to Sathi", stop: "Stop", thinking: "Thinking...", listening: "Listening...",
+    todayAtAGlance: "Today at a Glance", mood: "Mood", medicine: "Medicine", streak: "Streak",
+    emergencyHelp: "Emergency Help", guardian: "Guardian", medicalService: "Medical Service", pressFor3Sec: "Press for 3 seconds",
+    todaysMedicine: "Today's Medicine", viewAll: "View all", dailyMedicines: "Daily Medicines", taken: "taken", complete: "Complete",
+    whatWouldYouLike: "What would you like?", allFeatures: "All Features",
+    healthVault: "Health Vault", careCalendar: "Care Calendar", memoryJournal: "Memory Journal",
+    mindGames: "Mind Games", moodLift: "Mood Lift", dailyCheckIn: "Daily Check-In",
+    todaysSurprise: "Today's Surprise", memoryPrompt: "Memory Prompt", recordYourMemory: "Record your memory",
+    yourStreak: "Your Streak", dayStreak: "Day Streak!", onTheRightTrack: "You are on the right track",
+    voiceMessageFrom: "Voice message from", tapToListen: "Tap to listen", playRecording: "Play Recording",
+    liveLocation: "Live Location", sharingWithFamily: "Sharing with family", canSeeYourLocation: "can see your location", active: "Active",
+    dueAt: "Due at", priority: "Priority:",
+  },
+  "हिंदी": {
+    hello: "नमस्ते,", sathiAiSay: "साथी AI कहता है...", voiceCompanion: "आपका वॉइस AI साथी",
+    talkToSathi: "साथी से बात करें", stop: "रोकें", thinking: "सोच रहा है...", listening: "सुन रहा है...",
+    todayAtAGlance: "आज की झलक", mood: "मूड", medicine: "दवाई", streak: "स्ट्रीक",
+    emergencyHelp: "आपातकालीन सहायता", guardian: "अभिभावक", medicalService: "चिकित्सा सेवा", pressFor3Sec: "3 सेकंड दबाएं",
+    todaysMedicine: "आज की दवाइयां", viewAll: "सभी देखें", dailyMedicines: "दैनिक दवाइयां", taken: "ली गई", complete: "पूर्ण",
+    whatWouldYouLike: "आप क्या चाहते हैं?", allFeatures: "सभी सुविधाएं",
+    healthVault: "स्वास्थ्य वॉल्ट", careCalendar: "केयर कैलेंडर", memoryJournal: "यादों की डायरी",
+    mindGames: "मानसिक खेल", moodLift: "मूड लिफ्ट", dailyCheckIn: "दैनिक चेक-इन",
+    todaysSurprise: "आज का सरप्राइज", memoryPrompt: "यादों का संकेत", recordYourMemory: "अपनी याद रिकॉर्ड करें",
+    yourStreak: "आपकी स्ट्रीक", dayStreak: "दिन की स्ट्रीक!", onTheRightTrack: "आप सही राह पर हैं",
+    voiceMessageFrom: "से वॉइस संदेश", tapToListen: "सुनने के लिए टैप करें", playRecording: "रिकॉर्डिंग चलाएं",
+    liveLocation: "लाइव लोकेशन", sharingWithFamily: "परिवार के साथ साझा", canSeeYourLocation: "आपकी लोकेशन देख सकते हैं", active: "सक्रिय",
+    dueAt: "समय:", priority: "प्राथमिकता:",
+  },
+  "ગુજરાતી": {
+    hello: "નમસ્તે,", sathiAiSay: "સાથી AI કહે છે...", voiceCompanion: "તમારો વૉઇસ AI સાથી",
+    talkToSathi: "સાથી સાથે વાત કરો", stop: "બંધ", thinking: "વિચારી રહ્યો છે...", listening: "સાંભળી રહ્યો છે...",
+    todayAtAGlance: "આજની ઝલક", mood: "મૂડ", medicine: "દવા", streak: "સ્ટ્રીક",
+    emergencyHelp: "કટોકટી સહાય", guardian: "વાલી", medicalService: "તબીબી સેવા", pressFor3Sec: "3 સેકન્ડ દબાવો",
+    todaysMedicine: "આજની દવાઓ", viewAll: "બધું જુઓ", dailyMedicines: "દૈનિક દવાઓ", taken: "લીધી", complete: "પૂર્ણ",
+    whatWouldYouLike: "તમે શું ઇચ્છો છો?", allFeatures: "બધી સુવિધાઓ",
+    healthVault: "સ્વાસ્થ્ય વૉલ્ટ", careCalendar: "કૅર કૅલેન્ડર", memoryJournal: "યાદો ડાયરી",
+    mindGames: "મનોરંજક રમતો", moodLift: "મૂડ લિફ્ટ", dailyCheckIn: "દૈનિક ચેક-ઇન",
+    todaysSurprise: "આજનો સરપ્રાઇઝ", memoryPrompt: "યાદ સૂચના", recordYourMemory: "તમારી યાદ રેકૉર્ડ કરો",
+    yourStreak: "તમારી સ્ટ્રીક", dayStreak: "દિવસ સ્ટ્રીક!", onTheRightTrack: "તમે સાચા રસ્તે છો",
+    voiceMessageFrom: "તરફથી વૉઇસ સંદેશ", tapToListen: "સાંભળવા ટૅપ કરો", playRecording: "રેકૉર્ડિંગ ચલાવો",
+    liveLocation: "લાઇવ લોકેશન", sharingWithFamily: "પરિવાર સાથે શૅર", canSeeYourLocation: "તમારું સ્થાન જોઈ શકે છે", active: "સક્રિય",
+    dueAt: "સમય:", priority: "પ્રાથમિકતા:",
+  },
+  "தமிழ்": {
+    hello: "வணக்கம்,", sathiAiSay: "சாதி AI சொல்கிறது...", voiceCompanion: "உங்கள் குரல் AI தோழர்",
+    talkToSathi: "சாதியிடம் பேசுங்கள்", stop: "நிறுத்து", thinking: "சிந்திக்கிறது...", listening: "கேட்கிறது...",
+    todayAtAGlance: "இன்றைய பார்வை", mood: "மனநிலை", medicine: "மருந்து", streak: "தொடர்",
+    emergencyHelp: "அவசர உதவி", guardian: "பாதுகாவலர்", medicalService: "மருத்துவ சேவை", pressFor3Sec: "3 வினாடி அழுத்துங்கள்",
+    todaysMedicine: "இன்றைய மருந்துகள்", viewAll: "அனைத்தும் காண்க", dailyMedicines: "தினசரி மருந்துகள்", taken: "எடுக்கப்பட்டது", complete: "முடிந்தது",
+    whatWouldYouLike: "நீங்கள் என்ன விரும்புகிறீர்கள்?", allFeatures: "அனைத்து அம்சங்கள்",
+    healthVault: "சுகாதார பெட்டகம்", careCalendar: "பராமரிப்பு நாட்காட்டி", memoryJournal: "நினைவு நாட்குறிப்பு",
+    mindGames: "மன விளையாட்டு", moodLift: "மனநிலை உயர்வு", dailyCheckIn: "தினசரி சரிபார்ப்பு",
+    todaysSurprise: "இன்றைய ஆச்சரியம்", memoryPrompt: "நினைவு தூண்டுதல்", recordYourMemory: "உங்கள் நினைவை பதிவு செய்யுங்கள்",
+    yourStreak: "உங்கள் தொடர்", dayStreak: "நாள் தொடர்!", onTheRightTrack: "நீங்கள் சரியான பாதையில் இருக்கிறீர்கள்",
+    voiceMessageFrom: "இலிருந்து குரல் செய்தி", tapToListen: "கேட்க தட்டுங்கள்", playRecording: "பதிவை இயக்கு",
+    liveLocation: "நேரடி இருப்பிடம்", sharingWithFamily: "குடும்பத்துடன் பகிர்வு", canSeeYourLocation: "உங்கள் இருப்பிடத்தை பார்க்கலாம்", active: "செயலில்",
+    dueAt: "நேரம்:", priority: "முன்னுரிமை:",
+  },
+  "বাংলা": {
+    hello: "নমস্কার,", sathiAiSay: "সাথি AI বলছে...", voiceCompanion: "আপনার ভয়েস AI সঙ্গী",
+    talkToSathi: "সাথির সাথে কথা বলুন", stop: "থামান", thinking: "ভাবছে...", listening: "শুনছে...",
+    todayAtAGlance: "আজকের একনজর", mood: "মেজাজ", medicine: "ওষুধ", streak: "ধারা",
+    emergencyHelp: "জরুরী সাহায্য", guardian: "অভিভাবক", medicalService: "চিকিৎসা সেবা", pressFor3Sec: "৩ সেকেন্ড চাপুন",
+    todaysMedicine: "আজকের ওষুধ", viewAll: "সব দেখুন", dailyMedicines: "দৈনিক ওষুধ", taken: "নেওয়া হয়েছে", complete: "সম্পন্ন",
+    whatWouldYouLike: "আপনি কী চান?", allFeatures: "সব বৈশিষ্ট্য",
+    healthVault: "স্বাস্থ্য ভল্ট", careCalendar: "যত্ন ক্যালেন্ডার", memoryJournal: "স্মৃতি ডায়েরি",
+    mindGames: "মস্তিষ্কের খেলা", moodLift: "মেজাজ উন্নতি", dailyCheckIn: "দৈনিক চেক-ইন",
+    todaysSurprise: "আজকের বিস্ময়", memoryPrompt: "স্মৃতির ইঙ্গিত", recordYourMemory: "আপনার স্মৃতি রেকর্ড করুন",
+    yourStreak: "আপনার ধারা", dayStreak: "দিনের ধারা!", onTheRightTrack: "আপনি সঠিক পথে আছেন",
+    voiceMessageFrom: "থেকে ভয়েস বার্তা", tapToListen: "শুনতে ট্যাপ করুন", playRecording: "রেকর্ডিং চালান",
+    liveLocation: "লাইভ লোকেশন", sharingWithFamily: "পরিবারের সাথে শেয়ার", canSeeYourLocation: "আপনার অবস্থান দেখতে পারবেন", active: "সক্রিয়",
+    dueAt: "সময়:", priority: "অগ্রাধিকার:",
+  },
+  "मराठी": {
+    hello: "नमस्कार,", sathiAiSay: "साथी AI म्हणतो...", voiceCompanion: "तुमचा व्हॉइस AI साथी",
+    talkToSathi: "साथीशी बोला", stop: "थांबवा", thinking: "विचार करत आहे...", listening: "ऐकत आहे...",
+    todayAtAGlance: "आजचा आढावा", mood: "मनःस्थिती", medicine: "औषध", streak: "स्ट्रीक",
+    emergencyHelp: "आपत्कालीन मदत", guardian: "पालक", medicalService: "वैद्यकीय सेवा", pressFor3Sec: "3 सेकंद दाबा",
+    todaysMedicine: "आजची औषधे", viewAll: "सर्व पाहा", dailyMedicines: "दैनंदिन औषधे", taken: "घेतली", complete: "पूर्ण",
+    whatWouldYouLike: "तुम्हाला काय हवे आहे?", allFeatures: "सर्व वैशिष्ट्ये",
+    healthVault: "आरोग्य व्हॉल्ट", careCalendar: "काळजी कॅलेंडर", memoryJournal: "आठवणी डायरी",
+    mindGames: "मनाचे खेळ", moodLift: "मनःस्थिती उन्नती", dailyCheckIn: "दैनंदिन चेक-इन",
+    todaysSurprise: "आजचा आश्चर्य", memoryPrompt: "आठवणीचे संकेत", recordYourMemory: "तुमची आठवण रेकॉर्ड करा",
+    yourStreak: "तुमची स्ट्रीक", dayStreak: "दिवस स्ट्रीक!", onTheRightTrack: "तुम्ही योग्य मार्गावर आहात",
+    voiceMessageFrom: "कडून व्हॉइस संदेश", tapToListen: "ऐकण्यासाठी टॅप करा", playRecording: "रेकॉर्डिंग चालवा",
+    liveLocation: "लाइव्ह स्थान", sharingWithFamily: "कुटुंबासोबत शेअर", canSeeYourLocation: "तुमचे स्थान पाहू शकतात", active: "सक्रिय",
+    dueAt: "वेळ:", priority: "प्राधान्य:",
+  },
+};
 
 const { width } = Dimensions.get("window");
 
@@ -55,37 +175,48 @@ function ElderHomeScreen() {
   const router = useRouter();
   const { profile, streak, user, logout } = useAuth();
   const insets = useSafeAreaInsets();
+  const { language, fontScale, colors: themeColors } = useLanguage();
+  const ht = (HT[language] ?? HT.English) as HomeT;
+  const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
+
+  const unreadCount = useUnreadNotifCount(user?.id);
 
   const [showMenu, setShowMenu] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [aiText, setAiText] = useState("");
-  const [activeVoiceUri, setActiveVoiceUri] = useState<string | null>(null);
-  const aiPlayer = useAudioPlayer(activeVoiceUri);
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [showSOSModal, setShowSOSModal] = useState(false);
+  const [showSathiModal, setShowSathiModal] = useState(false);
+  const [sosCountdown, setSosCountdown] = useState(5);
+  const sosTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [medicines, setMedicines] = useState<any[]>([]);
   const [medLoading, setMedLoading] = useState(true);
   const [healthStats, setHealthStats] = useState<any>(null);
-  const [dailyPrompt, setDailyPrompt] = useState("What was the most memorable journey of your life?");
+  const [dailyPrompt, setDailyPrompt] = useState("");
   const [latestMessage, setLatestMessage] = useState<any>(null);
   const [todayMood, setTodayMood] = useState<string>("—");
+  const [locationSharing, setLocationSharing] = useState<boolean | null>(null);
+
+  useFocusEffect(useCallback(() => {
+    if (!user) return;
+    supabase.from('elder_locations').select('is_sharing').eq('elder_id', user.id).maybeSingle().then(({ data }) => {
+      setLocationSharing(data?.is_sharing ?? false);
+    });
+  }, [user]));
 
   useEffect(() => {
     if (user) {
-      fetchMedicines();
       fetchHealthStats();
-      fetchDailyPrompt();
       fetchLatestMessage();
       fetchTodayMood();
     }
   }, [user]);
 
-  useEffect(() => {
-    if (profile) {
-      setAiText(getAiMessage());
-    }
-  }, [profile, medicines, healthStats]);
+  // Re-fetch medicines every time the tab comes into focus so deletions/additions
+  // made on the Medicine screen are immediately reflected here.
+  useFocusEffect(
+    useCallback(() => {
+      if (user) fetchMedicines();
+    }, [user])
+  );
 
   const fetchMedicines = async () => {
     try {
@@ -118,23 +249,11 @@ function ElderHomeScreen() {
     }
   };
 
-  const fetchDailyPrompt = async () => {
-    const prompts = [
-      "What was the most memorable journey of your life?",
-      "Who was your best friend in childhood?",
-      "What is your favorite family recipe and its story?",
-      "Describe a place that makes you feel peaceful.",
-      "What is the most valuable lesson you've learned?"
-    ];
-    const day = new Date().getDay();
-    setDailyPrompt(prompts[day % prompts.length]);
-  };
-
   const fetchTodayMood = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
-        .from('moods')
+        .from('daily_check_ins')
         .select('mood')
         .eq('user_id', user?.id)
         .eq('date', today)
@@ -162,7 +281,49 @@ function ElderHomeScreen() {
     }
   };
 
-  const userName = profile?.fullName || user?.email?.split('@')[0] || "Friend";
+  const firstName = getPreferredFirstName({
+    firstName: profile?.firstName,
+    fullName: profile?.fullName,
+    email: profile?.email || user?.email,
+  });
+  const displayFirstName = truncateName(firstName, 16);
+  const userName = profile?.fullName || firstName || user?.email?.split('@')[0] || "there";
+  const guardianEmergencyNumber = profile?.emergencyPhone?.trim() || "";
+  const guardianEmergencyLabel = profile?.emergencyRelation?.trim() || ht.guardian;
+  const countryEmergency = getCountryEmergency(profile?.countryCode || "");
+
+  const openSOSModal = () => {
+    setSosCountdown(5);
+    setShowSOSModal(true);
+    sosTimerRef.current = setInterval(() => {
+      setSosCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(sosTimerRef.current!);
+          if (guardianEmergencyNumber) {
+            Linking.openURL(`tel:${guardianEmergencyNumber}`).catch(() => {});
+          } else {
+            Linking.openURL(`tel:${countryEmergency.number}`).catch(() => {});
+          }
+          setShowSOSModal(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const closeSOSModal = () => {
+    if (sosTimerRef.current) clearInterval(sosTimerRef.current);
+    setShowSOSModal(false);
+    setSosCountdown(5);
+  };
+
+  const callContact = (number: string) => {
+    if (sosTimerRef.current) clearInterval(sosTimerRef.current);
+    setShowSOSModal(false);
+    setSosCountdown(5);
+    Linking.openURL(`tel:${number}`).catch(() => {});
+  };
 
   const takenCount = medicines.filter((m) => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -174,76 +335,63 @@ function ElderHomeScreen() {
     });
   }).length;
 
-  const totalCount = medicines.length || 3;
-  const progressPercent = medicines.length > 0 ? (takenCount / medicines.length) * 100 : 33;
+  const totalCount = medicines.length;
+  const progressPercent = medicines.length > 0 ? (takenCount / medicines.length) * 100 : 0;
 
-  const getAiMessage = () => {
-    let msg = `Good Morning ${userName}! `;
-    if (healthStats?.blood_sugar) {
-      msg += `Your blood sugar yesterday was ${healthStats.blood_sugar_status === 'High' ? 'a bit high' : 'normal'}. `;
-    } else {
-      msg += `Don't forget to check your heart rate today. `;
-    }
-    msg += `You've taken ${takenCount} medicines so far. Let's focus on your walk!`;
-    return msg;
-  };
+  const streakToday = new Date();
+  const streakDow = streakToday.getDay();
+  const mondayOffset = streakDow === 0 ? -6 : 1 - streakDow;
+  const monday = new Date(streakToday);
+  monday.setDate(streakToday.getDate() + mondayOffset);
+  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((dayLabel, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return { dayLabel, dayNum: d.getDate(), isToday: d.toDateString() === streakToday.toDateString() };
+  });
 
-  const handleTalkToSathi = async () => {
-    if (isRecording) {
-      setIsRecording(false);
-      recorder.stop();
-      const uri = recorder.uri;
-      if (!uri) return;
-      setAiText("Thinking...");
-      try {
-        const text = await sathiAi.transcribe(uri);
-        if (!text || text.trim() === "") {
-          setAiText("I'm sorry, I couldn't hear that properly. Could you try again?");
-          return;
-        }
-        setAiText(`You said: "${text}"`);
-        const context = `User: ${userName}. Stats: ${takenCount}/${totalCount} medicines taken.`;
-        const reply = await sathiAi.chat([{ role: 'user', content: text }], context);
-        setAiText(reply);
-        const voiceUri = await sathiAi.generateSpeech(reply);
-        if (voiceUri) {
-          setActiveVoiceUri(voiceUri);
-          setTimeout(() => { aiPlayer.play(); }, 150);
-        }
-      } catch (e: any) {
-        setAiText("I'm sorry, I'm having a bit of trouble talking right now.");
-        console.log("AI Error:", e);
-      }
-    } else {
-      const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) return;
-      setIsRecording(true);
-      setAiText("Listening...");
-      try {
-        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      } catch (ae) { console.log("Mode switch error", ae); }
-      await recorder.record();
-    }
-  };
+  const pendingMedicines = medicines.filter((med) => {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+    return !med.medicine_logs?.some((l: any) => {
+      if (!l?.taken_at) return false;
+      const t = new Date(l.taken_at).getTime();
+      return t >= start.getTime() && t <= end.getTime();
+    });
+  });
 
   return (
-    <View style={styles.mainContainer}>
+    <View style={[s.mainContainer, { backgroundColor: themeColors.bg }]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* ── FIXED: Gradient Header only ── */}
       <LinearGradient
         colors={C.headerGradient}
-        style={[styles.headerGradient, { paddingTop: insets.top + 16 }]}
+        style={[s.headerGradient, { paddingTop: insets.top + 16 }]}
       >
-        <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>
-            Hello, {userName.charAt(0).toUpperCase() + userName.slice(1)}!
-          </Text>
-          <View style={styles.headerIcons}>
-            <Pressable style={styles.headerIconBtn} onPress={() => router.push("/notifications")}>
+        <View style={s.headerTop}>
+          <View style={s.headerBrand}>
+            <View style={s.brandRow}>
+              <View style={s.brandIconWrap}>
+                <Image
+                  source={require('../../assets/images/TinyBit_LOGO_New.png')}
+                  style={s.brandIcon}
+                  resizeMode="contain"
+                  accessibilityLabel="TinyBit"
+                />
+              </View>
+              <Text style={s.brandTitle}>TinyBit</Text>
+            </View>
+          </View>
+          <View style={s.headerIcons}>
+            <Pressable style={s.headerIconBtn} onPress={() => router.push("/notifications")}>
               <Ionicons name="notifications-outline" size={24} color="white" />
+              {unreadCount > 0 && (
+                <View style={s.notifBadge}>
+                  <Text style={s.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
             </Pressable>
-            <Pressable style={styles.headerIconBtn} onPress={() => setShowMenu(true)}>
+            <Pressable style={s.headerIconBtn} onPress={() => setShowMenu(true)}>
               <Ionicons name="menu-outline" size={26} color="white" />
             </Pressable>
           </View>
@@ -251,194 +399,308 @@ function ElderHomeScreen() {
       </LinearGradient>
 
       {/* ── SCROLLABLE SHEET: rounds over gradient ── */}
-      <View style={styles.scrollSheet}>
+      <View style={[s.scrollSheet, { backgroundColor: themeColors.bg }]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           bounces={false}
-          contentContainerStyle={{ paddingBottom: 150, paddingTop: 16 }}
+          contentContainerStyle={{ paddingBottom: 150, paddingTop: 18 }}
         >
-          {/* Sathi AI Card */}
-          <Animated.View entering={FadeInUp.delay(200)} style={styles.sathiCard}>
-            <View style={styles.sathiMain}>
-              <View style={styles.sathiInfo}>
-                <Text style={styles.sathiLabel}>Sathi Ai Say...</Text>
-                <Text style={styles.sathiSubLabel}>Your Voice Ai companion</Text>
-                <Pressable onPress={handleTalkToSathi} style={{ alignSelf: 'flex-start' }}>
-                  <LinearGradient
-                    colors={isRecording ? [C.sos, '#C0392B'] : ['#1A3558', '#2E6DA4']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.talkBtn}
-                  >
-                    <Ionicons name={isRecording ? "stop" : "mic"} size={17} color="white" style={{ marginRight: 7 }} />
-                    <Text style={styles.talkBtnText}>{isRecording ? "Stop" : "Talk to Sathi"}</Text>
-                  </LinearGradient>
-                </Pressable>
-              </View>
-              <View style={styles.mascotBg}>
-                <Text style={styles.sparkle}>✦</Text>
-                <Image source={require('../../assets/images/homescreendrop.png')} style={styles.mascotImg} resizeMode="contain" />
-              </View>
-            </View>
-            <View style={styles.sathiBottom}>
-              <Text style={styles.sathiQuote}>{aiText || getAiMessage()}</Text>
-            </View>
-          </Animated.View>
+          {/* Guardian connection requests */}
+          <GuardianInviteCard />
 
-          {/* Today at a Glance */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today at a Glance</Text>
-            <Text style={styles.sectionActionMuted}>{new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+          {/* 1 — SOS / Emergency Help */}
+          <View style={s.sectionHeader}>
+            <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.emergencyHelp}</Text>
+            <TouchableOpacity onPress={() => router.push("/sos")} style={s.sosScreenLink}>
+              <Text style={s.sosScreenLinkText}>SOS Screen</Text>
+              <Ionicons name="chevron-forward" size={13} color="#E05555" />
+            </TouchableOpacity>
           </View>
-          <View style={styles.glanceRow}>
-            <GlanceCard title="Mood" color="#3FA4DA" img={require('../../assets/images/Mood.png')} value={todayMood} />
-            <GlanceCard title="Medicine" color="#4DB6AC" img={require('../../assets/images/Medicine.png')} value={`${takenCount}/${totalCount}`} />
-            <GlanceCard title="Streak" color="#FF8A65" img={require('../../assets/images/Streak.png')} value={streak.toString()} />
-          </View>
-
-          {/* Emergency Help */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Emergency Help</Text>
-          </View>
-          <View style={styles.emergencyRow}>
-            <View style={styles.contactsCol}>
-              <EmergencyContact name="Shivani Shah" sub="Guardian" />
-              <EmergencyContact name="Ambulance" sub="Medical Service" />
+          <View style={s.emergencyRow}>
+            <View style={s.contactsCol}>
+              <EmergencyContact
+                name={guardianEmergencyNumber || "Add contact"}
+                sub={guardianEmergencyLabel}
+              />
+              <EmergencyContact
+                name={countryEmergency.number}
+                sub={countryEmergency.label}
+              />
             </View>
-            <View style={styles.sosCol}>
-              <Pressable onPress={() => router.push("/sos")} style={styles.sosOuter}>
+            <View style={s.sosCol}>
+              <Pressable onPress={openSOSModal} style={s.sosOuter}>
                 <LinearGradient
                   colors={['#FF8A75', '#F05555']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={styles.sosInner}
+                  style={s.sosInner}
                 >
-                  <Text style={styles.sosText}>SOS</Text>
-                  <Text style={styles.sosSubText}>Press for 3 second</Text>
+                  <Text style={s.sosText}>SOS</Text>
+                  <Text style={s.sosSubText}>{ht.pressFor3Sec}</Text>
                 </LinearGradient>
               </Pressable>
             </View>
           </View>
 
-          {/* Todays Medicine */}
-          <View style={[styles.sectionHeader, { marginTop: 20 }]}>
-            <Text style={styles.sectionTitle}>Todays Medicine</Text>
-            <Pressable onPress={() => router.push("/medicine")}>
-              <Text style={styles.sectionActionLink}>View all</Text>
+          {/* SOS Call Modal */}
+          <Modal visible={showSOSModal} transparent animationType="fade" onRequestClose={closeSOSModal}>
+            <View style={s.sosModalOverlay}>
+              <View style={[s.sosModalCard, { backgroundColor: themeColors.card }]}>
+                <View style={s.sosModalHeader}>
+                  <Text style={s.sosModalTitle}>🆘 Emergency SOS</Text>
+                  <TouchableOpacity onPress={closeSOSModal} style={s.sosModalClose}>
+                    <Ionicons name="close" size={20} color="#15253E" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={s.sosModalSubtitle}>
+                  Calling in <Text style={{ color: "#D03050", fontWeight: "900" }}>{sosCountdown}s</Text>
+                  {guardianEmergencyNumber ? ` → ${guardianEmergencyLabel}` : ` → ${countryEmergency.label}`}
+                </Text>
+                <View style={s.sosCountdownBar}>
+                  <View style={[s.sosCountdownFill, { width: `${(sosCountdown / 5) * 100}%` }]} />
+                </View>
+                <Text style={s.sosModalPickText}>Or select who to call:</Text>
+
+                {guardianEmergencyNumber ? (
+                  <TouchableOpacity style={s.sosContactRow} onPress={() => callContact(guardianEmergencyNumber)}>
+                    <View style={s.sosContactAvatar}>
+                      <Ionicons name="person" size={20} color="#3FA4DA" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.sosContactName}>{guardianEmergencyLabel}</Text>
+                      <Text style={s.sosContactNum}>{guardianEmergencyNumber}</Text>
+                    </View>
+                    <View style={s.sosCallBtn}>
+                      <Ionicons name="call" size={16} color="#fff" />
+                    </View>
+                  </TouchableOpacity>
+                ) : null}
+
+                <TouchableOpacity style={s.sosContactRow} onPress={() => callContact(countryEmergency.number)}>
+                  <View style={[s.sosContactAvatar, { backgroundColor: "#FFF0EE" }]}>
+                    <Ionicons name="medical" size={20} color="#D03050" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.sosContactName}>{countryEmergency.label}</Text>
+                    <Text style={s.sosContactNum}>{countryEmergency.number}</Text>
+                  </View>
+                  <View style={[s.sosCallBtn, { backgroundColor: "#D03050" }]}>
+                    <Ionicons name="call" size={16} color="#fff" />
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={s.sosCancelBtn} onPress={closeSOSModal}>
+                  <Text style={s.sosCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* 2 — Today's Medicine (pending only) */}
+          <View style={[s.sectionHeader, { marginTop: 20 }]}>
+            <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.todaysMedicine}</Text>
+            <Pressable onPress={() => router.push("/medicine" as any)}>
+              <Text style={s.sectionActionLink}>{ht.viewAll}</Text>
             </Pressable>
           </View>
-          <View style={styles.medContainer}>
-            <View style={styles.medProgressCardWrap}>
-              <View style={styles.medProgressCard}>
-                <View style={styles.medRow}>
-                  <Text style={styles.medProgressTitle}>Daily Medicines</Text>
+          <View style={s.medContainer}>
+            <View style={s.medProgressCardWrap}>
+              <View style={[s.medProgressCard, { backgroundColor: themeColors.card }]}>
+                <View style={s.medRow}>
+                  <Text style={[s.medProgressTitle, { color: themeColors.text }]}>{ht.dailyMedicines}</Text>
                   <LinearGradient
                     colors={C.headerGradient}
-                    style={styles.pillCount}
+                    style={s.pillCount}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
-                    <Text style={styles.pillCountText}>{takenCount} of {totalCount} taken</Text>
+                    <Text style={s.pillCountText}>{takenCount} of {totalCount} {ht.taken}</Text>
                   </LinearGradient>
                 </View>
-                <Text style={styles.medPercent}>
-                  <Text style={{ color: C.accent }}>{Math.round(progressPercent)}%</Text>{' Complete'}
+                <Text style={[s.medPercent, { color: themeColors.text }]}>
+                  <Text style={{ color: C.accent }}>{Math.round(progressPercent)}%</Text>{' '}{ht.complete}
                 </Text>
-                <View style={styles.progressBarBg}>
-                  <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+                <View style={s.progressBarBg}>
+                  <View style={[s.progressBarFill, { width: `${progressPercent}%` }]} />
                 </View>
               </View>
             </View>
 
-            {medicines.length > 0 ? (
-              medicines.map((med) => {
-                const start = new Date(); start.setHours(0, 0, 0, 0);
-                const end = new Date(); end.setHours(23, 59, 59, 999);
-                const isTaken = med.medicine_logs?.some((l: any) => {
-                  if (!l?.taken_at) return false;
-                  const t = new Date(l.taken_at).getTime();
-                  return t >= start.getTime() && t <= end.getTime();
-                });
-                return (
-                  <MedicineItem
-                    key={med.id}
-                    time={med.time}
-                    name={med.name}
-                    meta={`Due ${med.time}`}
-                    priority={med.priority}
-                    desc={med.instructions || med.dosage}
-                    taken={isTaken}
-                  />
-                );
-              })
+            {medLoading ? (
+              <View style={s.allTakenCard}>
+                <Ionicons name="time-outline" size={28} color="#2B7FC0" />
+                <Text style={[s.allTakenText, { color: '#2B7FC0' }]}>Loading today's medicines...</Text>
+              </View>
+            ) : medicines.length === 0 ? (
+              <View style={s.allTakenCard}>
+                <Ionicons name="medkit-outline" size={28} color="#7A90A4" />
+                <Text style={[s.allTakenText, { color: '#5F6C7B' }]}>No medicines added yet. View all to manage your full list.</Text>
+              </View>
+            ) : pendingMedicines.length === 0 ? (
+              <View style={s.allTakenCard}>
+                <Ionicons name="checkmark-circle" size={28} color="#43A047" />
+                <Text style={s.allTakenText}>All pending medicines are completed for today.</Text>
+              </View>
             ) : (
-              <>
-                <MedicineItem time="11:00" name="Metformin Tablet 500mg" meta="Due 11:00 AM" priority="High" desc="Morning - after breakfast" taken />
-                <MedicineItem time="14:00" name="Amlodipine 5mg" meta="Due 2:00 PM" priority="High" desc="Afternoon - After Lunch" taken />
-                <MedicineItem time="14:00" name="Atorvastatin 10mg" meta="Due 9:00 PM" priority="High" desc="Evening - Before Bedtime" due="9:00" />
-              </>
+              pendingMedicines.slice(0, 3).map((med) => (
+                <MedicineItem
+                  key={med.id}
+                  time={med.time}
+                  name={med.name}
+                  meta={`Due ${med.time}`}
+                  priority={med.priority}
+                  desc={med.instructions || med.dosage}
+                  taken={false}
+                />
+              ))
             )}
           </View>
 
-          {/* What would you like? */}
-          <View style={[styles.sectionHeader, { marginTop: 25 }]}>
-            <Text style={styles.sectionTitle}>What would you like ?</Text>
-            <Pressable><Text style={styles.sectionActionLink}>All Features</Text></Pressable>
+          {/* 3 — Sathi AI Card */}
+          <Animated.View entering={FadeInUp.delay(200)} style={[s.sathiCard, { marginHorizontal: 20, marginTop: 25, backgroundColor: themeColors.card }]}>
+            <View style={s.sathiMain}>
+              <View style={s.sathiInfo}>
+                <Text style={[s.sathiPrompt, { color: themeColors.muted }]}>How are you today,</Text>
+                <Text style={[s.sathiName, { color: themeColors.text }]} numberOfLines={1} ellipsizeMode="tail">
+                  {displayFirstName} ?
+                </Text>
+                <Pressable onPress={() => setShowSathiModal(true)} style={{ alignSelf: 'flex-start' }}>
+                  <LinearGradient
+                    colors={['#1A3558', '#2E6DA4']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={s.talkBtn}
+                  >
+                    <Ionicons name="chatbubble-ellipses" size={17} color="white" style={{ marginRight: 7 }} />
+                    <Text style={s.talkBtnText}>{ht.talkToSathi}</Text>
+                  </LinearGradient>
+                </Pressable>
+              </View>
+              <View style={s.mascotBg}>
+                <Text style={s.sparkle}>✦</Text>
+                <Image source={require('../../assets/images/homescreendrop.png')} style={s.mascotImg} resizeMode="contain" />
+              </View>
+            </View>
+          </Animated.View>
+
+          {/* 4 — Voice Message from Family */}
+          <View style={[s.sectionHeader, { marginTop: 25 }]}>
+            <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.voiceMessageFrom}</Text>
           </View>
-          <View style={styles.grid}>
-            <GridItem title="Health Vault" sub="3 Reports" color="#4DB6AC" img={require('../../assets/images/HealthVault.png')} target="/health-vault" />
-            <GridItem title="Care Calendear" sub="Doctor: Friday" color="#64B5F6" img={require('../../assets/images/CareCalender.png')} target="/care-calendar" />
-            <GridItem title="Memory Journal" sub="5 Days Streak" color="#FF8A65" img={require('../../assets/images/MemoryJournal.png')} target="/journal" />
-            <GridItem title="Mind Games" sub="Challenge Ready" color="#546E7A" img={require('../../assets/images/MindGames.png')} target="/mind-games" />
-            <GridItem title="Mood Lift" sub="Play a Bhajan" color="#81C784" img={require('../../assets/images/MoodLift.png')} target="/mood-lift" />
-            <GridItem title="Daily Check - In" sub="Sathi is ready" color="#BA68C8" img={require('../../assets/images/DailyCheckIn.png')} target="/daily-check-in" />
+          <View style={[s.voiceCard, { backgroundColor: themeColors.card }]}>
+            {latestMessage ? (
+              <>
+                <View style={s.voiceHeader}>
+                  <Image source={require('../../assets/images/IamFamily.png')} style={s.voiceAvatar} />
+                  <View style={{ marginLeft: 14, flex: 1 }}>
+                    <Text style={[s.voiceName, { color: themeColors.text }]}>
+                      {`${ht.voiceMessageFrom} ${latestMessage.sender?.full_name ?? ''}`.trim()}
+                    </Text>
+                    <Text style={s.voiceTime}>
+                      {`${ht.tapToListen} · ${Math.round((Date.now() - new Date(latestMessage.created_at).getTime()) / 60000)} min ago`}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable onPress={() => router.push('/family-messages')} style={s.playBtnWrap}>
+                  <LinearGradient
+                    colors={['#3AAEDF', '#2176AE']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={s.playBtn}
+                  >
+                    <Ionicons name="play" size={18} color="white" />
+                    <Text style={s.playBtnText}>{ht.playRecording}</Text>
+                  </LinearGradient>
+                </Pressable>
+              </>
+            ) : (
+              <View style={[s.emptyPanel, { backgroundColor: themeColors.card }]}>
+                <Ionicons name="chatbubble-ellipses-outline" size={22} color="#7A90A4" />
+                <Text style={s.emptyPanelText}>No voice messages yet.</Text>
+              </View>
+            )}
           </View>
 
-          {/* Today's Surprise — Memory Prompt */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Surprise</Text>
-            <Text style={styles.sectionActionMuted}>{new Date().toLocaleDateString('en-US', { weekday: 'long' })}</Text>
+          {/* 5 — Today at a Glance */}
+          <View style={s.sectionHeader}>
+            <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.todayAtAGlance}</Text>
+            <Text style={s.sectionActionMuted}>{new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
           </View>
-          <View style={styles.surpriseCard}>
-            <Text style={styles.surpriseLabel}>
-              Memory Prompt . {new Date().toLocaleDateString('en-US', { weekday: 'long' })}
+          <View style={s.glanceRow}>
+            <GlanceCard title={ht.mood} color="#3FA4DA" img={require('../../assets/images/Mood.png')} value={todayMood} />
+            <GlanceCard title={ht.medicine} color="#4DB6AC" img={require('../../assets/images/Medicine.png')} value={`${takenCount}/${totalCount}`} />
+            <GlanceCard title={ht.streak} color="#FF8A65" img={require('../../assets/images/Streak.png')} value={streak.toString()} />
+          </View>
+
+          {/* 6 — What would you like? */}
+          <View style={[s.sectionHeader, { marginTop: 25 }]}>
+            <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.whatWouldYouLike}</Text>
+            <Pressable><Text style={s.sectionActionLink}>{ht.allFeatures}</Text></Pressable>
+          </View>
+          <View style={s.grid}>
+            <GridItem title={ht.healthVault} sub="" color="#4DB6AC" img={require('../../assets/images/HealthVault.png')} target="/health-vault" />
+            <GridItem title={ht.careCalendar} sub="" color="#64B5F6" img={require('../../assets/images/CareCalender.png')} target="/care-calendar" />
+            <GridItem title={ht.memoryJournal} sub="" color="#FF8A65" img={require('../../assets/images/MemoryJournal.png')} target="/journal" />
+            <GridItem title={ht.mindGames} sub="" color="#546E7A" img={require('../../assets/images/MindGames.png')} target="/mind-games" />
+            <GridItem title={ht.moodLift} sub="" color="#81C784" img={require('../../assets/images/MoodLift.png')} target="/mood-lift" />
+            <GridItem title={ht.dailyCheckIn} sub="" color="#BA68C8" img={require('../../assets/images/DailyCheckIn.png')} target="/daily-check-in" />
+          </View>
+
+          {/* 6b — Health Tools Row */}
+          <View style={[s.sectionHeader, { marginTop: 22 }]}>
+            <Text style={[s.sectionTitle, { color: themeColors.text }]}>Health Tools</Text>
+          </View>
+          <View style={s.toolsGrid}>
+            <ToolCard emoji="🏥" title="Health Log" sub="Medicine, mood, vitals" color="#1E3A5F" target="/(tabs)/health-log" />
+            <ToolCard emoji="💧" title="Wellness Logs" sub="Track vitals & habits" color="#3B82F6" target="/(tabs)/wellness-logs" />
+            <ToolCard emoji="🌤️" title="Weather" sub="Clothing suggestions" color="#F59E0B" target="/weather" />
+            <ToolCard emoji="🥗" title="Calorie Scan" sub="AI food scanner" color="#16A34A" target="/calorie-calculator" />
+            <ToolCard emoji="🎓" title="Help & Tutorials" sub="Learn how to use" color="#8B5CF6" target="/help" />
+          </View>
+
+          {/* 7 — Record your Memory */}
+          <View style={s.sectionHeader}>
+            <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.recordYourMemory}</Text>
+          </View>
+          <View style={[s.surpriseCard, { backgroundColor: themeColors.card }]}>
+            <Text style={[s.surpriseLabel, { color: themeColors.muted }]}>{ht.memoryPrompt}</Text>
+            <Text style={[s.surpriseText, { color: themeColors.text }]}>
+              {dailyPrompt ? `"${dailyPrompt}"` : "Open your journal to record a new memory."}
             </Text>
-            <Text style={styles.surpriseText}>{'"' + dailyPrompt + '"'}</Text>
-            <Pressable onPress={() => router.push('/journal')} style={styles.recordBtnWrap}>
+            <Pressable onPress={() => router.push('/journal')} style={s.recordBtnWrap}>
               <LinearGradient
                 colors={['#3AAEDF', '#2176AE']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={styles.recordBtn}
+                style={s.recordBtn}
               >
                 <Ionicons name="mic" size={20} color="white" />
-                <Text style={styles.recordBtnText}>Record your memory</Text>
+                <Text style={s.recordBtnText}>Open Journal</Text>
               </LinearGradient>
             </Pressable>
           </View>
 
-          {/* Your Streak */}
-          <View style={[styles.sectionHeader, { marginTop: 25 }]}>
-            <Text style={styles.sectionTitle}>Your Streak</Text>
+          {/* 8 — Your Streak */}
+          <View style={[s.sectionHeader, { marginTop: 25 }]}>
+            <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.yourStreak}</Text>
           </View>
-          <View style={styles.streakWrapper}>
-            <View style={styles.streakIconCircle}>
+          <View style={s.streakWrapper}>
+            <View style={s.streakIconCircle}>
               <Image source={require('../../assets/images/Streak.png')} style={{ width: 52, height: 52 }} resizeMode="contain" />
             </View>
-            <View style={styles.streakCard}>
-              <Text style={styles.streakTitle}>{streak} Day Streak!</Text>
-              <Text style={styles.streakSub}>You are on the right track</Text>
-              <View style={styles.calendarRow}>
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
-                  const isToday = i === new Date().getDay() - 1;
+            <View style={[s.streakCard, { backgroundColor: themeColors.card }]}>
+              <Text style={[s.streakTitle, { color: themeColors.text }]}>{streak} {ht.dayStreak}</Text>
+              <Text style={[s.streakSub, { color: themeColors.muted }]}>{ht.onTheRightTrack}</Text>
+              <View style={s.calendarRow}>
+                {weekDays.map(({ dayLabel, dayNum, isToday }, i) => {
                   const hasFire = i < streak;
                   return (
-                    <View key={day} style={styles.calendarDay}>
-                      <Text style={[styles.dayText, isToday && { color: '#E53935', fontWeight: '800' }]}>{day}</Text>
+                    <View key={dayLabel} style={s.calendarDay}>
+                      <Text style={[s.dayText, isToday && { color: '#E53935', fontWeight: '800' }]}>{dayLabel}</Text>
                       {hasFire ? (
                         <Text style={{ fontSize: 22 }}>🔥</Text>
                       ) : (
-                        <Text style={[styles.dayNum, isToday && { color: '#E53935' }]}>{i + 6}</Text>
+                        <Text style={[s.dayNum, isToday && { color: '#E53935' }]}>{dayNum}</Text>
                       )}
                     </View>
                   );
@@ -447,65 +709,40 @@ function ElderHomeScreen() {
             </View>
           </View>
 
-          {/* Voice Message from Family */}
-          <View style={[styles.sectionHeader, { marginTop: 25 }]}>
-            <Text style={styles.sectionTitle}>Today's Surprise</Text>
-            <Text style={styles.sectionActionMuted}>{new Date().toLocaleDateString('en-US', { weekday: 'long' })}</Text>
+          {/* 9 — Live Location */}
+          <View style={[s.sectionHeader, { marginTop: 25 }]}>
+            <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.liveLocation}</Text>
+            <Text style={s.sectionActionMuted}>{new Date().toLocaleDateString('en-US', { weekday: 'long' })}</Text>
           </View>
-          <View style={styles.voiceCard}>
-            <View style={styles.voiceHeader}>
-              <Image source={require('../../assets/images/IamFamily.png')} style={styles.voiceAvatar} />
+          <Pressable
+            style={[s.locationCard, { backgroundColor: themeColors.card }]}
+            onPress={() => router.push('/location' as any)}
+          >
+            <View style={s.locationLeft}>
+              <View style={[s.locationIcon, { backgroundColor: locationSharing ? '#FFF0F0' : '#F4F6FA' }]}>
+                <Ionicons name="location" size={26} color={locationSharing ? '#F44336' : '#B0BEC5'} />
+              </View>
               <View style={{ marginLeft: 14, flex: 1 }}>
-                <Text style={styles.voiceName}>
-                  {latestMessage
-                    ? `Voice message from ${latestMessage.sender?.full_name ?? 'Family'}`
-                    : 'Voice message from Rahul'}
-                </Text>
-                <Text style={styles.voiceTime}>
-                  {latestMessage
-                    ? `Tap to listen . ${Math.round((Date.now() - new Date(latestMessage.created_at).getTime()) / 60000)} min ago`
-                    : 'Tap to listen . 2 min ago'}
+                <Text style={[s.locationTitle, { color: themeColors.text }]}>{ht.liveLocation}</Text>
+                <Text style={[s.locationSub, { color: themeColors.muted }]}>
+                  {locationSharing === null
+                    ? 'Loading...'
+                    : locationSharing
+                    ? 'Your family can see your location'
+                    : 'Tap to start sharing with family'}
                 </Text>
               </View>
             </View>
-            <Pressable onPress={() => router.push('/family-messages')} style={styles.playBtnWrap}>
-              <LinearGradient
-                colors={['#3AAEDF', '#2176AE']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.playBtn}
-              >
-                <Ionicons name="play" size={18} color="white" />
-                <Text style={styles.playBtnText}>Play Recording</Text>
-              </LinearGradient>
-            </Pressable>
-          </View>
+            <View style={[s.activeBadge, { backgroundColor: locationSharing ? '#D1FADF' : '#F1F5F9' }]}>
+              <View style={[s.activeDot, { backgroundColor: locationSharing ? '#16A34A' : '#B0BEC5' }]} />
+              <Text style={[s.activeText, { color: locationSharing ? '#16A34A' : '#8A9BB0' }]}>
+                {locationSharing ? 'On' : 'Off'}
+              </Text>
+            </View>
+          </Pressable>
 
-          {/* Live Location */}
-          <View style={[styles.sectionHeader, { marginTop: 25 }]}>
-            <Text style={styles.sectionTitle}>Live Location</Text>
-            <Text style={styles.sectionActionMuted}>{new Date().toLocaleDateString('en-US', { weekday: 'long' })}</Text>
-          </View>
-          <View style={styles.locationCard}>
-            <View style={styles.locationLeft}>
-              <View style={styles.locationIcon}>
-                <Ionicons name="location" size={26} color="#F44336" />
-              </View>
-              <View style={{ marginLeft: 14, flex: 1 }}>
-                <Text style={styles.locationTitle}>Sharing with family</Text>
-                <Text style={styles.locationSub}>
-                  <Text style={{ color: '#37B1E6', fontWeight: '700' }}>Rahul</Text>
-                  {' & '}
-                  <Text style={{ color: '#37B1E6', fontWeight: '700' }}>Priya</Text>
-                  {' can see your location'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.activeBadge}>
-              <View style={styles.activeDot} />
-              <Text style={styles.activeText}>Active</Text>
-            </View>
-          </View>
+          {/* 10 — Emergency Health QR */}
+          <HealthQRWidget />
 
         </ScrollView>
       </View>
@@ -517,35 +754,30 @@ function ElderHomeScreen() {
         userEmail={user?.email}
         onLogout={logout}
       />
+
+      <TalkToSathiModal
+        visible={showSathiModal}
+        onClose={() => setShowSathiModal(false)}
+        userName={userName}
+        context={`User: ${userName}. Medicines taken today: ${takenCount} of ${totalCount}.`}
+      />
     </View>
   );
 }
 
 function GlanceCard({ title, color, img, value }: any) {
+  const { fontScale, colors: tc } = useLanguage();
+  const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
   return (
-    <View style={styles.glanceCard}>
-      <View style={[styles.glanceBadge, { backgroundColor: color }]}>
-        <Text style={styles.glanceBadgeText}>{title}</Text>
+    <View style={[s.glanceCard, { backgroundColor: tc.card }]}>
+      <View style={[s.glanceBadge, { backgroundColor: color }]}>
+        <Text style={s.glanceBadgeText}>{title}</Text>
       </View>
-      <View style={styles.glanceContent}>
-        <Image source={img} style={styles.glanceImg} resizeMode="contain" />
-        <Text style={[styles.glanceValue, { color }]}>{value}</Text>
+      <View style={s.glanceContent}>
+        <Image source={img} style={s.glanceImg} resizeMode="contain" />
+        <Text style={[s.glanceValue, { color }]}>{value}</Text>
       </View>
     </View>
-  );
-}
-
-function EmergencyContact({ name, sub }: any) {
-  return (
-    <Pressable style={styles.contactItem}>
-      <View style={styles.contactIconCircle}>
-        <Ionicons name="call" size={22} color="#fff" />
-      </View>
-      <View style={{ marginLeft: 14 }}>
-        <Text style={styles.contactName}>{name}</Text>
-        <Text style={styles.contactSub}>{sub}</Text>
-      </View>
-    </Pressable>
   );
 }
 
@@ -557,36 +789,55 @@ function getTagTheme(desc: string) {
   return { bg: '#E8F5E9', text: '#2E7D32' };
 }
 
+function EmergencyContact({ name, sub }: any) {
+  const { fontScale, colors: tc } = useLanguage();
+  const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
+  return (
+    <View style={[s.contactItem, { backgroundColor: tc.card }]}>
+      <View style={s.contactIconCircle}>
+        <Ionicons name="call" size={22} color="#fff" />
+      </View>
+      <View style={{ marginLeft: 14, flex: 1 }}>
+        <Text style={[s.contactName, { color: tc.text }]} numberOfLines={1}>{name}</Text>
+        <Text style={[s.contactSub, { color: tc.muted }]} numberOfLines={1}>{sub}</Text>
+      </View>
+    </View>
+  );
+}
+
 function MedicineItem({ time, name, meta, priority, desc, taken, due }: any) {
+  const { language, fontScale, colors: tc } = useLanguage();
+  const ht = (HT[language] ?? HT.English) as HomeT;
+  const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
   const tag = getTagTheme(desc);
   return (
-    <View style={styles.medItem}>
-      <View style={styles.medTimeCol}>
-        <Text style={styles.medTimeText}>{time}</Text>
-        <View style={styles.medTimeline} />
+    <View style={s.medItem}>
+      <View style={s.medTimeCol}>
+        <Text style={[s.medTimeText, { color: tc.muted }]}>{time}</Text>
+        <View style={s.medTimeline} />
       </View>
-      <View style={styles.medContentCard}>
-        <View style={styles.medItemTop}>
-          <Text style={styles.medItemName}>{name}</Text>
+      <View style={[s.medContentCard, { backgroundColor: tc.card }]}>
+        <View style={s.medItemTop}>
+          <Text style={[s.medItemName, { color: tc.text }]}>{name}</Text>
           {taken ? (
-            <View style={styles.takenBadge}>
+            <View style={s.takenBadge}>
               <Ionicons name="checkmark-circle" size={16} color="#43A047" />
-              <Text style={styles.takenText}>Taken</Text>
+              <Text style={s.takenText}>{ht.taken}</Text>
             </View>
           ) : due ? (
-            <View style={styles.dueBadge}>
-              <Text style={styles.dueText}>Due at {due}</Text>
+            <View style={s.dueBadge}>
+              <Text style={s.dueText}>{ht.dueAt} {due}</Text>
             </View>
           ) : null}
         </View>
-        <View style={styles.medItemMeta}>
+        <View style={s.medItemMeta}>
           <Ionicons name="time-outline" size={13} color="#9AA5B4" />
-          <Text style={styles.medItemMetaText}>{meta}</Text>
+          <Text style={s.medItemMetaText}>{meta}</Text>
           <Ionicons name="time-outline" size={13} color="#9AA5B4" style={{ marginLeft: 10 }} />
-          <Text style={styles.medItemMetaText}>Priority: {priority}</Text>
+          <Text style={s.medItemMetaText}>{ht.priority} {priority}</Text>
         </View>
-        <View style={[styles.medTag, { backgroundColor: tag.bg }]}>
-          <Text style={[styles.medTagText, { color: tag.text }]}>{desc}</Text>
+        <View style={[s.medTag, { backgroundColor: tag.bg }]}>
+          <Text style={[s.medTagText, { color: tag.text }]}>{desc}</Text>
         </View>
       </View>
     </View>
@@ -595,27 +846,46 @@ function MedicineItem({ time, name, meta, priority, desc, taken, due }: any) {
 
 function GridItem({ title, sub, color, img, target }: any) {
   const router = useRouter();
+  const { fontScale, colors: tc } = useLanguage();
+  const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
   return (
-    <Pressable style={styles.gridItem} onPress={() => router.push(target as any)}>
-      <View style={[styles.gridTag, { backgroundColor: color }]}>
-        <Text style={styles.gridTagText}>{title}</Text>
+    <Pressable style={[s.gridItem, { backgroundColor: tc.card }]} onPress={() => router.push(target as any)}>
+      <View style={[s.gridTag, { backgroundColor: color }]}>
+        <Text style={s.gridTagText}>{title}</Text>
       </View>
-      <View style={styles.gridContent}>
-        <Image source={img} style={styles.gridImg} resizeMode="contain" />
-        <Text style={styles.gridSub}>{sub}</Text>
+      <View style={s.gridContent}>
+        <Image source={img} style={s.gridImg} resizeMode="contain" />
+        <Text style={s.gridSub}>{sub}</Text>
       </View>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+function ToolCard({ emoji, title, sub, color, target }: { emoji: string; title: string; sub: string; color: string; target: string }) {
+  const router = useRouter();
+  const { colors: tc } = useLanguage();
+  return (
+    <Pressable
+      style={[RAW_STYLES.toolCard, { backgroundColor: tc.card }]}
+      onPress={() => router.push(target as any)}
+    >
+      <View style={[RAW_STYLES.toolEmojiBg, { backgroundColor: color + '18' }]}>
+        <Text style={RAW_STYLES.toolEmoji}>{emoji}</Text>
+      </View>
+      <Text style={[RAW_STYLES.toolTitle, { color: tc.text }]}>{title}</Text>
+      <Text style={RAW_STYLES.toolSub}>{sub}</Text>
+    </Pressable>
+  );
+}
+
+const RAW_STYLES = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: C.bg },
   scrollSheet: {
     flex: 1,
     marginTop: -28,
     backgroundColor: C.bg,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
     overflow: 'hidden',
   },
   headerGradient: {
@@ -628,7 +898,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: -6,
     marginBottom: 20,
   },
   headerTitle: {
@@ -636,6 +906,34 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: 'white',
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
+  },
+  headerBrand: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  brandIconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  brandIcon: {
+    width: 42,
+    height: 42,
+  },
+  brandTitle: {
+    flex: 1,
+    fontSize: 28,
+    fontWeight: '900',
+    color: 'white',
+    letterSpacing: -0.2,
   },
   headerIcons: {
     flexDirection: 'row',
@@ -649,6 +947,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  notifBadge: {
+    position: 'absolute', top: 6, right: 6,
+    minWidth: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.9)',
+  },
+  notifBadgeText: { fontSize: 9, fontWeight: '900', color: '#fff' },
   sathiCard: {
     backgroundColor: 'white',
     borderRadius: 24,
@@ -663,8 +970,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sathiInfo: { flex: 1, paddingRight: 10 },
-  sathiLabel: { fontSize: 28, fontWeight: '900', color: '#0E1B2E', letterSpacing: -0.5 },
-  sathiSubLabel: { fontSize: 13, color: '#7A90A4', fontWeight: '500', marginTop: 2, marginBottom: 16 },
+  sathiPrompt: { fontSize: 18, color: '#7A90A4', fontWeight: '700', marginBottom: 4 },
+  sathiName: { fontSize: 30, fontWeight: '900', color: '#0E1B2E', letterSpacing: -0.6, marginBottom: 16 },
   talkBtn: {
     flexDirection: 'row',
     paddingHorizontal: 22,
@@ -748,6 +1055,17 @@ const styles = StyleSheet.create({
   },
   contactName: { fontSize: 16, fontWeight: '800', color: '#1A3050' },
   contactSub: { fontSize: 13, color: '#9AA5B4', fontWeight: '500', marginTop: 2 },
+  emptyPanel: {
+    backgroundColor: 'white',
+    borderRadius: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    ...C.cardShadow,
+  },
+  emptyPanelText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#5F6C7B' },
   sosCol: { width: 140, alignItems: 'center' },
   sosOuter: {
     width: 150,
@@ -822,6 +1140,23 @@ const styles = StyleSheet.create({
   medTag: { marginTop: 12, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20, alignSelf: 'flex-start' },
   medTagText: { fontSize: 15, fontWeight: '700' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, paddingHorizontal: 20 },
+  // Health Tools grid
+  toolsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20 },
+  toolCard: {
+    width: (width - 54) / 2,
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+    gap: 8,
+    ...C.cardShadow,
+  },
+  toolEmojiBg: {
+    width: 56, height: 56, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  toolEmoji:  { fontSize: 28 },
+  toolTitle:  { fontSize: 14, fontWeight: '900', color: '#1A3050', textAlign: 'center' },
+  toolSub:    { fontSize: 11, color: '#8A94A6', fontWeight: '600', textAlign: 'center' },
   gridItem: {
     width: (width - 54) / 2,
     height: 190,
@@ -839,7 +1174,7 @@ const styles = StyleSheet.create({
   gridTagText: { color: 'white', fontSize: 13, fontWeight: '800' },
   gridContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 14 },
   gridImg: { width: 100, height: 100, marginBottom: 10 },
-  gridSub: { fontSize: 13, color: '#8A94A6', fontWeight: '600' },
+  gridSub: { fontSize: 13, color: '#8A94A6', fontWeight: '600', minHeight: 16 },
   surpriseCard: {
     backgroundColor: 'white',
     borderRadius: 24,
@@ -953,4 +1288,64 @@ const styles = StyleSheet.create({
   activeText: { color: '#43A047', fontSize: 13, fontWeight: '800' },
   medContainer: { paddingBottom: 10 },
   medProgressCardWrap: { paddingHorizontal: 20, marginBottom: 8 },
+  allTakenCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#E8F5E9', borderRadius: 20,
+    padding: 20, marginHorizontal: 20, marginBottom: 16,
+  },
+  allTakenText: { fontSize: 16, fontWeight: '700', color: '#2E7D32', flex: 1 },
+
+  // SOS screen link
+  sosScreenLink: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  sosScreenLinkText: { fontSize: 13, fontWeight: '700', color: '#E05555' },
+
+  // SOS call modal
+  sosModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(10,20,40,0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: 22,
+  },
+  sosModalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    padding: 24,
+  },
+  sosModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sosModalTitle: { fontSize: 20, fontWeight: '900', color: '#15253E' },
+  sosModalClose: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#F0F3F8', alignItems: 'center', justifyContent: 'center',
+  },
+  sosModalSubtitle: { fontSize: 14, fontWeight: '600', color: '#4A5568', marginBottom: 10 },
+  sosCountdownBar: {
+    height: 5, backgroundColor: '#F0F3F8', borderRadius: 3,
+    overflow: 'hidden', marginBottom: 20,
+  },
+  sosCountdownFill: { height: '100%', backgroundColor: '#D03050', borderRadius: 3 },
+  sosModalPickText: { fontSize: 13, fontWeight: '700', color: '#8A94A6', marginBottom: 12 },
+  sosContactRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F3F8',
+  },
+  sosContactAvatar: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#EEF6FC', alignItems: 'center', justifyContent: 'center',
+  },
+  sosContactName: { fontSize: 14, fontWeight: '800', color: '#15253E' },
+  sosContactNum: { fontSize: 12, fontWeight: '500', color: '#8A94A6', marginTop: 2 },
+  sosCallBtn: {
+    width: 38, height: 38, borderRadius: 13,
+    backgroundColor: '#3FA4DA', alignItems: 'center', justifyContent: 'center',
+  },
+  sosCancelBtn: {
+    marginTop: 18, alignItems: 'center', paddingVertical: 14,
+    backgroundColor: '#F0F3F8', borderRadius: 16,
+  },
+  sosCancelText: { fontSize: 15, fontWeight: '800', color: '#8A94A6' },
 });

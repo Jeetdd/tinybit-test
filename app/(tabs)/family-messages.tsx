@@ -1,739 +1,1289 @@
-import React, { useState } from "react";
+/**
+ * Voice Memos — guardian records & sends voice messages to elder(s).
+ * Elder receives from ALL connected guardians in one unified inbox.
+ *
+ * Multi-guardian: elder fetches receiver_id = elder.id (catches every guardian)
+ * Multi-elder:    guardian uses chip selector → activeId
+ */
+import React, {
+  useState, useCallback, useRef, useEffect, useMemo,
+} from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  StatusBar,
-  Dimensions,
-  Modal,
-  TextInput,
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import * as ImagePicker from 'expo-image-picker';
-import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync } from 'expo-audio';
-import Animated, { FadeInDown } from "react-native-reanimated";
+  View, Text, StyleSheet, FlatList, Pressable, StatusBar,
+  ActivityIndicator, Alert, Animated, ScrollView, TextInput,
+  KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import {
+  useAudioRecorder, useAudioPlayer,
+  RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync,
+} from 'expo-audio';
 
-import { useAuth } from "../../context/AuthContext";
-import { supabase } from "../../utils/supabase";
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../utils/supabase';
+import {
+  useRealtimeColumn, useRealtimeBroadcast, broadcastSignal,
+} from '../../services/realtimeSync';
+import { notifyElder, notifyGuardians } from '../../services/pushNotifications';
+import { notifyElderOf, notifyGuardiansOf } from '../../services/notifications';
 
-const { width } = Dimensions.get("window");
-
+// ─── Theme ──────────────────────────────────────────────────────────────────
 const C = {
-  navy: "#1A3050",
-  teal: "#5CB8B2",
-  white: "#FFFFFF",
-  bg: "#EDF2F5",
-  cardBg: "#223A57",
-  cardBtnBg: "#3A5576",
-  muted: "#7A90A4",
-  whatsapp: "#399155",
+  bg:       '#F0F4F8',
+  navy:     '#1A3050',
+  teal:     '#5CB8B2',
+  white:    '#FFFFFF',
+  muted:    '#7A90A4',
+  border:   '#E2E8F0',
+  danger:   '#EF4444',
+  success:  '#16A34A',
+  card:     '#FFFFFF',
+  unread:   '#EF4444',
 };
 
-interface Message {
-  id: string;
-  sender_id: string;
-  sender_name?: string;
-  type: 'voice' | 'photo' | 'text';
-  created_at: string;
-  duration?: number;
-  content?: string;
-  media_url?: string;
-  is_read?: boolean;
+const MEMBER_COLORS = ['#3A7BD5', '#E91E8C', '#5CB8B2', '#FF9800', '#8B5CF6', '#10B981'];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+type VoiceMemo = {
+  id:          string;
+  sender_id:   string;
+  receiver_id: string;
+  sender_name: string;
+  created_at:  string;
+  type:        'voice' | 'text';
+  duration:    number | null;
+  media_url:   string | null;
+  content:     string | null;
+  is_read:     boolean;
+};
+
+type Contact = {
+  id:    string;
+  name:  string;
+  rel:   string;
+  color: string;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+async function uploadAudio(uri: string, userId: string): Promise<string> {
+  const buf  = await (await fetch(uri)).arrayBuffer();
+  const path = `${userId}/${Date.now()}.m4a`;
+  const { error } = await supabase.storage
+    .from('voice-messages')
+    .upload(path, buf, { contentType: 'audio/m4a' });
+  if (error) throw error;
+  return supabase.storage.from('voice-messages').getPublicUrl(path).data.publicUrl;
 }
 
-export default function FamilyMessagesScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+function fmtDuration(secs: number | null) {
+  if (!secs) return '—';
+  const m = Math.floor(secs / 60);
+  const s = (secs % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  // Voice Recording
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const [isRecording, setIsRecording] = useState(false);
+function timeAgo(iso: string) {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60)   return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
 
-  // Text Modal
-  const [textModalVisible, setTextModalVisible] = useState(false);
-  const [messageText, setMessageText] = useState("");
+function daysUntilExpiry(iso: string): number {
+  const expiresAt = new Date(iso).getTime() + 7 * 24 * 60 * 60 * 1000;
+  return Math.max(0, Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
+}
 
+function expiryLabel(iso: string): { text: string; urgent: boolean } {
+  const days = daysUntilExpiry(iso);
+  if (days === 0) return { text: 'Expires today', urgent: true };
+  if (days === 1) return { text: 'Expires tomorrow', urgent: true };
+  return { text: `Expires in ${days} days`, urgent: false };
+}
+
+function dayLabel(iso: string) {
+  const d = new Date(iso); d.setHours(0, 0, 0, 0);
+  const t = new Date();    t.setHours(0, 0, 0, 0);
+  const y = new Date(t);   y.setDate(t.getDate() - 1);
+  if (d.getTime() === t.getTime()) return 'Today';
+  if (d.getTime() === y.getTime()) return 'Yesterday';
+  return new Date(iso).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+type ListItem =
+  | { kind: 'date';  label: string }
+  | { kind: 'memo';  memo: VoiceMemo; contactColor: string };
+
+function buildList(memos: VoiceMemo[], contactMap: Record<string, Contact>): ListItem[] {
+  const items: ListItem[] = [];
+  let lastDay = '';
+  for (const memo of memos) {
+    const day = new Date(memo.created_at).toDateString();
+    if (day !== lastDay) {
+      items.push({ kind: 'date', label: dayLabel(memo.created_at) });
+      lastDay = day;
+    }
+    const color = contactMap[memo.sender_id]?.color ?? C.teal;
+    items.push({ kind: 'memo', memo, contactColor: color });
+  }
+  return items;
+}
+
+// ─── MemoCard ─────────────────────────────────────────────────────────────────
+// Each card manages its own player but defers to parent playingId for coordination.
+function MemoCard({
+  memo,
+  contactColor,
+  isOwn,
+  playingId,
+  onPlay,
+  onStop,
+  onDelete,
+}: {
+  memo:         VoiceMemo;
+  contactColor: string;
+  isOwn:        boolean;
+  playingId:    string | null;
+  onPlay:       (id: string) => void;
+  onStop:       () => void;
+  onDelete:     (memo: VoiceMemo) => void;
+}) {
+  const isPlaying = playingId === memo.id;
+  const src       = useMemo(
+    () => (memo.media_url ? { uri: memo.media_url } : { uri: '' }),
+    [memo.media_url],
+  );
+  const player = useAudioPlayer(src);
+
+  // Sync play/pause with parent's playingId
   useEffect(() => {
-    if (user) {
-      fetchMessages();
-    }
-  }, [user]);
-
-  const fetchMessages = async () => {
+    if (!memo.media_url) return;
     try {
-      const { data, error } = await supabase
-        .from('family_messages')
-        .select('*, sender:profiles!sender_id (full_name)')
-        .eq('receiver_id', user?.id)
-        .order('created_at', { ascending: false });
+      if (isPlaying) player.play();
+      else           player.pause();
+    } catch {}
+  }, [isPlaying]);
 
-      if (error) throw error;
-      
-      const formatted = (data || []).map(m => ({
-        ...m,
-        sender_name: m.sender?.full_name
-      }));
-      
-      setMessages(formatted);
-    } catch (err) {
-      console.log('Error fetching messages', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const startRecording = async () => {
+  const toggle = async () => {
+    if (!memo.media_url) return;
     try {
-      const permission = await requestRecordingPermissionsAsync();
-      if (permission.granted) {
-        await recorder.record();
-        setIsRecording(true);
-      }
-    } catch (err) {
-      console.error('Failed to start recording', err);
-      Alert.alert("Microphone Error", "Please grant microphone permissions to record.");
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      if (isPlaying) onStop();
+      else           onPlay(memo.id);
+    } catch (e: any) {
+      Alert.alert('Playback error', e.message ?? 'Could not play this message.');
     }
   };
 
-  const stopRecording = async () => {
-    try {
-      setIsRecording(false);
-      await recorder.stop();
-      const uri = recorder.uri;
-      
-      if (uri) {
-        const { error } = await supabase
-          .from('family_messages')
-          .insert([{
-            sender_id: user?.id,
-            receiver_id: '8689888d-7667-466d-888a-6668777a666b', // Placeholder family member ID
-            type: 'voice',
-            media_url: uri,
-            duration: 0 // In a real app we'd get duration
-          }]);
-        
-        if (error) throw error;
-        Alert.alert("Voice Sent!", "Your wonderful voice message has been sent to the family.");
-        fetchMessages();
-      }
-    } catch (err) {
-      console.error('Stop recording error', err);
-    }
-  };
-
-  const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.7,
-    });
-
-    if (!result.canceled) {
-       const { error } = await supabase
-          .from('family_messages')
-          .insert([{
-            sender_id: user?.id,
-            receiver_id: '8689888d-7667-466d-888a-6668777a666b',
-            type: 'photo',
-            media_url: result.assets[0].uri
-          }]);
-      if (error) Alert.alert("Error", error.message);
-      else {
-        Alert.alert("Photo Sent!", "Your photo is on its way to your loved ones.");
-        fetchMessages();
-      }
-    }
-  };
-
-  const sendTextMessage = async () => {
-    if (messageText.trim().length === 0) return;
-    
-    try {
-      const { error } = await supabase
-          .from('family_messages')
-          .insert([{
-            sender_id: user?.id,
-            receiver_id: '8689888d-7667-466d-888a-6668777a666b',
-            type: 'text',
-            content: messageText
-          }]);
-      
-      if (error) throw error;
-      
-      Alert.alert("Message Sent!", "We've shared your message with the family.");
-      setMessageText("");
-      setTextModalVisible(false);
-      fetchMessages();
-    } catch (err: any) {
-      Alert.alert("Error", err.message);
-    }
-  };
+  const initial = memo.sender_name?.[0]?.toUpperCase() ?? '?';
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={C.white} translucent={false} />
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <Pressable style={styles.backButton} onPress={() => router.push("/")}>
-            <Ionicons name="chevron-back" size={24} color="#1A3050" />
-          </Pressable>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Family Messages</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.headerSubtitle}>3 new messages from family </Text>
-              <View style={styles.headerRedDot} />
-            </View>
-          </View>
+    <Pressable
+      style={[s.memoCard, !memo.is_read && !isOwn && s.memoCardUnread]}
+      onLongPress={() => isOwn && onDelete(memo)}
+    >
+      {/* Unread indicator */}
+      {!memo.is_read && !isOwn && (
+        <View style={s.unreadBadge}>
+          <Text style={s.unreadBadgeTxt}>NEW</Text>
+        </View>
+      )}
+
+      <View style={s.memoTop}>
+        {/* Sender avatar */}
+        <View style={[s.memoAvatar, { backgroundColor: isOwn ? '#E8F0FE' : contactColor }]}>
+          <Text style={[s.memoAvatarTxt, { color: isOwn ? C.navy : '#fff' }]}>
+            {isOwn ? '✦' : initial}
+          </Text>
         </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
-          {/* Main Action Card */}
-          <Animated.View entering={FadeInDown.delay(100)} style={styles.actionCard}>
-            <Text style={styles.actionCardLabel}>SEND A MESSAGE TO FAMILY</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-              <Text style={styles.actionCardTitle}>Talk to Your Loved Ones </Text>
-              <Text style={{ fontSize: 22 }}>💛</Text>
-            </View>
-            <Text style={styles.actionCardSub}>Record voice · Send to family instantly</Text>
+        {/* Sender name + time */}
+        <View style={{ flex: 1 }}>
+          <Text style={s.memoSender}>
+            {isOwn ? 'You' : memo.sender_name}
+          </Text>
+          <Text style={s.memoTime}>{timeAgo(memo.created_at)}</Text>
+        </View>
 
-            <View style={styles.actionButtonsRow}>
-              {/* Record Voice Button */}
-              <Pressable 
-                style={[styles.actionBtn, isRecording ? styles.actionBtnRecording : styles.actionBtnTeal]}
-                onPress={isRecording ? stopRecording : startRecording}
-              >
-                <View style={[styles.actionBtnIconBox, isRecording && { backgroundColor: 'rgba(255,255,255,0.3)' }]}>
-                  <Ionicons name={isRecording ? "stop" : "mic-outline"} size={26} color="white" />
-                </View>
-                <Text style={styles.actionBtnText}>{isRecording ? "Stop" : "Record\nVoice"}</Text>
-                <Text style={styles.actionBtnSubText}>{isRecording ? "Recording..." : "Tap & speak"}</Text>
-              </Pressable>
+        {/* Duration pill */}
+        <View style={[s.durPill, { backgroundColor: isOwn ? '#E8F0FE' : `${contactColor}22` }]}>
+          <Ionicons name="mic-outline" size={12} color={isOwn ? C.navy : contactColor} />
+          <Text style={[s.durTxt, { color: isOwn ? C.navy : contactColor }]}>
+            {fmtDuration(memo.duration)}
+          </Text>
+        </View>
+      </View>
 
-              {/* Send Photo Button */}
-              <Pressable style={[styles.actionBtn, styles.actionBtnDark]} onPress={pickImage}>
-                <View style={styles.actionBtnIconBoxDark}>
-                  <Ionicons name="camera-outline" size={26} color="white" />
-                </View>
-                <Text style={styles.actionBtnText}>{"Send\nPhoto"}</Text>
-                <Text style={styles.actionBtnSubText}>Take or{"\n"}upload</Text>
-              </Pressable>
-
-              {/* Send Text Button */}
-              <Pressable style={[styles.actionBtn, styles.actionBtnDark]} onPress={() => setTextModalVisible(true)}>
-                <View style={styles.actionBtnIconBoxDark}>
-                  <Ionicons name="chatbubble-outline" size={26} color="white" />
-                </View>
-                <Text style={styles.actionBtnText}>Send Text</Text>
-                <Text style={[styles.actionBtnSubText, { marginTop: 22 }]}>Type a{"\n"}message</Text>
-              </Pressable>
-            </View>
-          </Animated.View>
-
-          {/* Send To Section */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Send To</Text>
-            <Text style={styles.sectionAction}>All Family →</Text>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.familyScroll}>
-            {FAMILY_MEMBERS.map((member, index) => (
-              <Animated.View entering={FadeInDown.delay(200 + index * 50)} key={member.id} style={styles.familyMemberBox}>
-                <View style={[styles.avatarBox, { backgroundColor: member.color }]}>
-                  <Text style={styles.avatarLetter}>{member.letter}</Text>
-                  {member.badge && (
-                    <View style={styles.avatarBadge}>
-                      <Text style={styles.avatarBadgeText}>{member.badge}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.memberName}>{member.name}</Text>
-                <Text style={styles.memberRel}>{member.rel}</Text>
-              </Animated.View>
-            ))}
-          </ScrollView>
-
-          {/* Received Messages */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Received Messages</Text>
-            <Text style={styles.sectionAction}>All →</Text>
-          </View>
-
-          <Animated.View entering={FadeInDown.delay(400)} style={styles.messagesContainer}>
-            {messages.length > 0 ? messages.map((msg, index) => {
-              const timeStr = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              return (
-                <View key={msg.id} style={[styles.messageRow, index < messages.length - 1 && styles.messageRowBorder]}>
-                  <View style={[styles.msgAvatarBox, { backgroundColor: '#5CB8B2' }]}>
-                    <Text style={styles.msgAvatarLetter}>{msg.sender_name?.charAt(0) || "F"}</Text>
-                  </View>
-                  <View style={styles.msgContentCol}>
-                    <Text style={styles.msgName}>{msg.sender_name}</Text>
-                    <View style={styles.msgTypeRow}>
-                      {msg.type === 'voice' && <Text style={{fontSize: 12}}>🎙️</Text>}
-                      {msg.type === 'photo' && <Text style={{fontSize: 12}}>📷</Text>}
-                      {msg.type === 'text' && <Text style={{fontSize: 12}}>💬</Text>}
-                      <Text style={styles.msgTypeDesc}>
-                        {msg.type === 'voice' && (msg.duration ? `${msg.duration}s` : "Voice message")}
-                        {msg.type === 'photo' && " Photo"}
-                        {msg.type === 'text' && (msg.content || " Text message")}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.msgRightCol}>
-                    <Text style={styles.msgTime}>{timeStr}</Text>
-                    {msg.is_read === false ? (
-                      <View style={styles.msgBadge}>
-                        <Text style={styles.msgBadgeText}>1</Text>
-                      </View>
-                    ) : (
-                      <Pressable style={styles.playBtn}>
-                        <Ionicons name="play-outline" size={14} color={C.teal} />
-                        <Text style={styles.playBtnText}>Play</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                </View>
-              );
-            }) : (
-              <View style={{ padding: 40, alignItems: 'center' }}>
-                <Text style={{ color: C.muted, fontWeight: '700' }}>No messages yet. Send one!</Text>
-              </View>
-            )}
-          </Animated.View>
-
-          {/* WhatsApp Card */}
-          <Text style={[styles.sectionTitle, { marginBottom: 15 }]}>Also on WhatsApp</Text>
-          <Animated.View entering={FadeInDown.delay(500)} style={styles.whatsappCard}>
-            <View style={styles.waIconBox}>
-              <Ionicons name="chatbubble" size={28} color="#D1ECD8" />
-            </View>
-            <View style={styles.waContentCol}>
-              <Text style={styles.waTitle}>Family WhatsApp{"\n"}Group</Text>
-              <Text style={styles.waSubTitle}>All messages also sent{"\n"}there · 5 members</Text>
-            </View>
-            <Pressable style={styles.waOpenBtn}>
-              <Text style={styles.waOpenText}>Open →</Text>
-            </Pressable>
-          </Animated.View>
-
-          <View style={{ height: 100 }} />
-        </ScrollView>
-
-      {/* Text Modal */}
-      <Modal visible={textModalVisible} transparent animationType="slide">
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : undefined} 
-          style={styles.modalOverlay}
+      {/* Waveform + play button */}
+      <Pressable style={s.playerRow} onPress={toggle} disabled={!memo.media_url}>
+        <LinearGradient
+          colors={isPlaying ? [C.teal, '#3A8BC0'] : ['#E8EDF3', '#DDE3EC']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={s.playBtn}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Write a Message</Text>
-              <Pressable onPress={() => setTextModalVisible(false)} style={styles.modalClose}>
-                <Ionicons name="close" size={24} color={C.navy} />
-              </Pressable>
-            </View>
-            <TextInput
-              style={styles.textInput}
-              placeholder="How are you all doing today?"
-              placeholderTextColor="#999"
-              multiline
-              autoFocus
-              value={messageText}
-              onChangeText={setMessageText}
-            />
-            <Pressable style={styles.sendBtn} onPress={sendTextMessage}>
-              <Text style={styles.sendBtnText}>Send Message</Text>
-              <Ionicons name="send" size={18} color="white" style={{marginLeft: 8}} />
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          <Ionicons
+            name={isPlaying ? 'pause' : 'play'}
+            size={22}
+            color={isPlaying ? '#fff' : C.navy}
+          />
+        </LinearGradient>
 
+        <View style={s.waveWrap}>
+          {[5, 12, 8, 18, 10, 16, 6, 20, 14, 9, 17, 7, 13, 11, 15].map((h, i) => (
+            <Animated.View
+              key={i}
+              style={[s.waveBar, {
+                height: isPlaying ? h * 1.2 : h,
+                backgroundColor: isPlaying ? C.teal : '#C8D5E3',
+                opacity: isPlaying ? 1 : 0.6,
+              }]}
+            />
+          ))}
+        </View>
+
+        <Text style={[s.playLabel, { color: isPlaying ? C.teal : C.muted }]}>
+          {isPlaying ? 'Playing…' : !memo.is_read && !isOwn ? 'Tap to listen' : 'Play'}
+        </Text>
+      </Pressable>
+
+      {/* Footer: read status (own) + expiry countdown */}
+      <View style={s.memoFooter}>
+        {isOwn ? (
+          <View style={s.memoStatus}>
+            <Ionicons
+              name={memo.is_read ? 'checkmark-done' : 'checkmark'}
+              size={13}
+              color={memo.is_read ? C.success : C.muted}
+            />
+            <Text style={[s.memoStatusTxt, { color: memo.is_read ? C.success : C.muted }]}>
+              {memo.is_read ? 'Played' : 'Delivered'}
+            </Text>
+          </View>
+        ) : <View />}
+
+        {(() => {
+          const { text, urgent } = expiryLabel(memo.created_at);
+          return (
+            <View style={[s.expiryPill, urgent && s.expiryPillUrgent]}>
+              <Ionicons
+                name="time-outline"
+                size={11}
+                color={urgent ? '#B45309' : C.muted}
+              />
+              <Text style={[s.expiryPillTxt, urgent && { color: '#B45309' }]}>
+                {text}
+              </Text>
+            </View>
+          );
+        })()}
+      </View>
+    </Pressable>
+  );
+}
+
+// ─── NoteCard ─────────────────────────────────────────────────────────────────
+function NoteCard({
+  memo,
+  contactColor,
+  isOwn,
+  onDelete,
+}: {
+  memo:         VoiceMemo;
+  contactColor: string;
+  isOwn:        boolean;
+  onDelete:     (memo: VoiceMemo) => void;
+}) {
+  const initial = memo.sender_name?.[0]?.toUpperCase() ?? '?';
+  const { text: expiryText, urgent } = expiryLabel(memo.created_at);
+
+  return (
+    <Pressable
+      style={[s.noteCard, !memo.is_read && !isOwn && s.noteCardUnread]}
+      onLongPress={() => isOwn && onDelete(memo)}
+    >
+      {!memo.is_read && !isOwn && (
+        <View style={s.unreadBadge}>
+          <Text style={s.unreadBadgeTxt}>NEW</Text>
+        </View>
+      )}
+
+      <View style={s.memoTop}>
+        <View style={[s.memoAvatar, { backgroundColor: isOwn ? '#FFF9E6' : contactColor }]}>
+          <Text style={[s.memoAvatarTxt, { color: isOwn ? '#D97706' : '#fff' }]}>
+            {isOwn ? '✏' : initial}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.memoSender}>{isOwn ? 'You' : memo.sender_name}</Text>
+          <Text style={s.memoTime}>{timeAgo(memo.created_at)}</Text>
+        </View>
+        <View style={[s.notePill, { backgroundColor: isOwn ? '#FFF9E6' : `${contactColor}22` }]}>
+          <Ionicons name="document-text-outline" size={12} color={isOwn ? '#D97706' : contactColor} />
+          <Text style={[s.notePillTxt, { color: isOwn ? '#D97706' : contactColor }]}>Note</Text>
+        </View>
+      </View>
+
+      <View style={s.noteBody}>
+        <Text style={s.noteContent}>{memo.content}</Text>
+      </View>
+
+      <View style={s.memoFooter}>
+        {isOwn ? (
+          <View style={s.memoStatus}>
+            <Ionicons
+              name={memo.is_read ? 'checkmark-done' : 'checkmark'}
+              size={13}
+              color={memo.is_read ? C.success : C.muted}
+            />
+            <Text style={[s.memoStatusTxt, { color: memo.is_read ? C.success : C.muted }]}>
+              {memo.is_read ? 'Read' : 'Delivered'}
+            </Text>
+          </View>
+        ) : <View />}
+
+        <View style={[s.expiryPill, urgent && s.expiryPillUrgent]}>
+          <Ionicons name="time-outline" size={11} color={urgent ? '#B45309' : C.muted} />
+          <Text style={[s.expiryPillTxt, urgent && { color: '#B45309' }]}>{expiryText}</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+// ─── Recording overlay ────────────────────────────────────────────────────────
+function RecordingPanel({
+  secs, sending, bottomPad, onCancel, onSend,
+}: {
+  secs: number; sending: boolean; bottomPad: number;
+  onCancel: () => void; onSend: () => void;
+}) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(pulse, { toValue: 1.6, duration: 700, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1.08, duration: 700, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(pulse, { toValue: 1,   duration: 700, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1,   duration: 700, useNativeDriver: true }),
+        ]),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  const m  = Math.floor(secs / 60);
+  const ss = (secs % 60).toString().padStart(2, '0');
+
+  return (
+    <View style={[s.recPanel, { paddingBottom: bottomPad }]}>
+      {/* Pulsing mic */}
+      <View style={s.recMicWrap}>
+        <Animated.View
+          style={[s.recRing, { transform: [{ scale: pulse }], opacity: 0.25 }]}
+        />
+        <Animated.View style={[s.recMicBg, { transform: [{ scale }] }]}>
+          <Ionicons name="mic" size={34} color="#fff" />
+        </Animated.View>
+      </View>
+
+      <Text style={s.recTimer}>{m}:{ss}</Text>
+      <Text style={s.recHint}>Recording… release to send</Text>
+
+      <View style={s.recBtnRow}>
+        <Pressable style={s.recCancelBtn} onPress={onCancel} disabled={sending}>
+          <Ionicons name="trash-outline" size={20} color={C.danger} />
+          <Text style={s.recCancelTxt}>Cancel</Text>
+        </Pressable>
+
+        <Pressable
+          style={[s.recSendBtn, sending && { opacity: 0.7 }]}
+          onPress={onSend}
+          disabled={sending}
+        >
+          {sending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="send" size={18} color="#fff" />
+              <Text style={s.recSendTxt}>Send</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+export default function FamilyMessagesScreen() {
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
+  const { user, profile } = useAuth();
+
+  const isGuardian = profile?.role === 'guardian';
+
+  // Contacts: guardian sees their elders; elder sees their guardians
+  const [contacts,   setContacts]   = useState<Contact[]>([]);
+  const [activeId,   setActiveId]   = useState<string | null>(null); // only used by guardian
+  const [filterGid,  setFilterGid]  = useState<string | null>(null); // only used by elder
+
+  const [memos,      setMemos]      = useState<VoiceMemo[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [sending,    setSending]    = useState(false);
+  const [isRec,      setIsRec]      = useState(false);
+  const [recSecs,    setRecSecs]    = useState(0);
+  const [playingId,  setPlayingId]  = useState<string | null>(null);
+  const [noteText,   setNoteText]   = useState('');
+  const [showNote,   setShowNote]   = useState(false);
+
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const listRef     = useRef<FlatList>(null);
+  const recorder    = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
+  // Map contactId → Contact (for colour lookup in elder view)
+  const contactMap = useMemo(
+    () => Object.fromEntries(contacts.map(c => [c.id, c])),
+    [contacts],
+  );
+
+  // ── Fetch contacts ──────────────────────────────────────────────────────────
+  const fetchContacts = useCallback(async () => {
+    if (!user) return;
+    try {
+      if (isGuardian) {
+        // Guardian fetches their connected elders
+        const { data } = await supabase
+          .from('guardian_elder_links')
+          .select('elder_id, parent_name, relation')
+          .eq('guardian_id', user.id)
+          .eq('status', 'connected');
+        if (data?.length) {
+          // Deduplicate by elder_id — guard against duplicate rows
+          const seen = new Set<string>();
+          const list: Contact[] = data
+            .filter((l: any) => {
+              if (seen.has(l.elder_id)) return false;
+              seen.add(l.elder_id);
+              return true;
+            })
+            .map((l: any, i: number) => ({
+              id:    l.elder_id,
+              name:  l.parent_name || 'Elder',
+              rel:   l.relation    || 'Elder',
+              color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+            }));
+          setContacts(list);
+          setActiveId(prev => prev ?? list[0].id);
+        }
+      } else {
+        // Elder fetches ALL connected guardians
+        const { data: links } = await supabase
+          .from('guardian_elder_links')
+          .select('guardian_id, relation')
+          .eq('elder_id', user.id)
+          .eq('status', 'connected');
+        if (links?.length) {
+          // Deduplicate — same guardian can appear in multiple rows if re-invited
+          const uniqueIds = [...new Set(links.map((l: any) => l.guardian_id as string))];
+          const { data: profs } = await supabase
+            .from('profiles').select('id, full_name, role').in('id', uniqueIds);
+          const list: Contact[] = uniqueIds
+            .map((id, i) => {
+              // Only show guardians with a valid profile that is actually a guardian
+              const p = profs?.find((x: any) => x.id === id && x.role === 'guardian');
+              if (!p) return null;
+              const l = links.find((x: any) => x.guardian_id === id);
+              return {
+                id,
+                name:  p.full_name || 'Guardian',
+                rel:   l?.relation || 'Guardian',
+                color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+              };
+            })
+            .filter((c): c is Contact => c !== null);
+          setContacts(list);
+        }
+      }
+    } catch (e) { console.error('fetchContacts', e); }
+  }, [user, isGuardian]);
+
+  // ── Fetch voice memos ───────────────────────────────────────────────────────
+  const fetchMemos = useCallback(async () => {
+    if (!user) return;
+    // Only fetch memos from the last 7 days (mirrors server-side expiry)
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      let q = supabase
+        .from('family_messages')
+        .select('*, sender:profiles!sender_id (full_name)')
+        .in('type', ['voice', 'text'])
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: true });
+
+      if (isGuardian && activeId) {
+        // Guardian: only memos between me and the selected elder
+        q = q.or(
+          `and(sender_id.eq.${user.id},receiver_id.eq.${activeId}),` +
+          `and(sender_id.eq.${activeId},receiver_id.eq.${user.id})`,
+        );
+      } else if (!isGuardian) {
+        // Elder: ALL voice memos where I am sender or receiver (covers all guardians)
+        q = q.or(`receiver_id.eq.${user.id},sender_id.eq.${user.id}`);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      const list = (data ?? []).map((m: any) => ({
+        ...m,
+        sender_name: m.sender?.full_name ?? 'Unknown',
+      })) as VoiceMemo[];
+      setMemos(list);
+
+      // Mark received memos as read
+      const unread = list
+        .filter(m => m.receiver_id === user.id && !m.is_read)
+        .map(m => m.id);
+      if (unread.length > 0) {
+        await supabase
+          .from('family_messages')
+          .update({ is_read: true })
+          .in('id', unread);
+      }
+    } catch (e) { console.error('fetchMemos', e); }
+    finally { setLoading(false); }
+  }, [user, isGuardian, activeId]);
+
+  // ── Effects ─────────────────────────────────────────────────────────────────
+  useFocusEffect(useCallback(() => { fetchContacts(); }, [fetchContacts]));
+  useFocusEffect(useCallback(() => {
+    setLoading(true);
+    void fetchMemos();
+  }, [fetchMemos]));
+
+  // Realtime — elder: receiver_id = elder.id catches ALL guardians automatically
+  useRealtimeColumn('family_messages', 'receiver_id', user?.id, fetchMemos);
+  useRealtimeBroadcast(`voicememo-${user?.id}`, ['new-memo'], fetchMemos);
+
+  // Poll fallback every 10 s
+  useEffect(() => {
+    const t = setInterval(() => void fetchMemos(), 10_000);
+    return () => clearInterval(t);
+  }, [fetchMemos]);
+
+  // Auto-scroll to latest
+  useEffect(() => {
+    if (memos.length > 0) {
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [memos.length]);
+
+  // ── Record & send ────────────────────────────────────────────────────────────
+  const startRec = async () => {
+    const receiverId = isGuardian ? activeId : null;
+    if (isGuardian && !receiverId) {
+      Alert.alert('Select an elder first');
+      return;
+    }
+    const { granted } = await requestRecordingPermissionsAsync();
+    if (!granted) { Alert.alert('Permission', 'Microphone access is required.'); return; }
+    try {
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setIsRec(true);
+      setRecSecs(0);
+      recTimerRef.current = setInterval(() => setRecSecs(s => s + 1), 1000);
+    } catch (e: any) {
+      Alert.alert('Recording error', e.message ?? 'Could not start recording.');
+    }
+  };
+
+  const cancelRec = async () => {
+    clearInterval(recTimerRef.current!);
+    setIsRec(false); setRecSecs(0);
+    try { await recorder.stop(); } catch {}
+    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+  };
+
+  const sendNote = async () => {
+    const text = noteText.trim();
+    if (!text) return;
+    const receiverId = isGuardian ? activeId : null;
+    if (isGuardian && !receiverId) { Alert.alert('Select an elder first'); return; }
+    setSending(true);
+    setNoteText('');
+    setShowNote(false);
+    try {
+      if (isGuardian && receiverId) {
+        await supabase.from('family_messages').insert({
+          sender_id: user!.id, receiver_id: receiverId,
+          type: 'text', content: text, is_read: false,
+        });
+        broadcastSignal(`voicememo-${receiverId}`, 'new-memo');
+        const senderName = profile?.firstName || 'Your guardian';
+        await notifyElder(receiverId, '📝 Note', `${senderName} sent you a note`);
+        notifyElderOf(receiverId, user!.id, 'voice_message', '📝 Note from Guardian', `${senderName} sent you a text note`);
+      } else if (!isGuardian) {
+        await Promise.all(contacts.map(async (c) => {
+          await supabase.from('family_messages').insert({
+            sender_id: user!.id, receiver_id: c.id,
+            type: 'text', content: text, is_read: false,
+          });
+          broadcastSignal(`voicememo-${c.id}`, 'new-memo');
+        }));
+        const elderName = profile?.firstName || 'Your elder';
+        await notifyGuardians(user!.id, '📝 Note', `${elderName} sent a note`);
+        notifyGuardiansOf(user!.id, user!.id, 'voice_message', '📝 Note from Elder', `${elderName} sent you a text note`);
+      }
+      void fetchMemos();
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to send note.');
+    } finally { setSending(false); }
+  };
+
+  const sendRec = async () => {
+    const receiverId = isGuardian ? activeId : null;
+    if (!receiverId && isGuardian) return;
+    clearInterval(recTimerRef.current!);
+    const duration = recSecs;
+    setIsRec(false); setRecSecs(0);
+    setSending(true);
+    try {
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+      const uri = recorder.uri;
+      if (!uri) throw new Error('No recording URI');
+      const url = await uploadAudio(uri, user!.id);
+
+      if (isGuardian && receiverId) {
+        // Guardian → selected elder
+        await supabase.from('family_messages').insert({
+          sender_id: user!.id, receiver_id: receiverId,
+          type: 'voice', media_url: url, duration, is_read: false,
+        });
+        broadcastSignal(`voicememo-${receiverId}`, 'new-memo');
+        const senderName = profile?.firstName || 'Your guardian';
+        await notifyElder(receiverId, '🎙️ Voice Memo', `${senderName} sent you a voice message`);
+        notifyElderOf(receiverId, user!.id, 'voice_message', '🎙️ Voice Message', `${senderName} sent you a voice message`);
+      } else if (!isGuardian) {
+        // Elder → ALL connected guardians
+        const targets = contacts;
+        await Promise.all(targets.map(async (c) => {
+          await supabase.from('family_messages').insert({
+            sender_id: user!.id, receiver_id: c.id,
+            type: 'voice', media_url: url, duration, is_read: false,
+          });
+          broadcastSignal(`voicememo-${c.id}`, 'new-memo');
+        }));
+        const elderName = profile?.firstName || 'Your elder';
+        await notifyGuardians(user!.id, '🎙️ Voice Memo', `${elderName} sent a voice message`);
+        notifyGuardiansOf(user!.id, user!.id, 'voice_message', '🎙️ Voice Message', `${elderName} sent you a voice message`);
+      }
+
+      void fetchMemos();
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to send voice memo.');
+    } finally { setSending(false); }
+  };
+
+  // ── Delete ──────────────────────────────────────────────────────────────────
+  const deleteMemo = useCallback((memo: VoiceMemo) => {
+    Alert.alert('Delete', 'Remove this voice memo?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await supabase.from('family_messages').delete().eq('id', memo.id);
+            if (memo.media_url) {
+              const path = memo.media_url.split('/voice-messages/')[1];
+              if (path) await supabase.storage.from('voice-messages').remove([decodeURIComponent(path)]);
+            }
+            setPlayingId(null);
+            void fetchMemos();
+          } catch (e: any) { Alert.alert('Error', e.message); }
+        },
+      },
+    ]);
+  }, [fetchMemos]);
+
+  // ── Elder: unlink a guardian ────────────────────────────────────────────────
+  const unlinkGuardian = useCallback((contact: Contact) => {
+    Alert.alert(
+      'Remove Guardian',
+      `Remove ${contact.name} from your guardians? They will no longer be able to send you voice memos.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove', style: 'destructive', onPress: async () => {
+            try {
+              await supabase
+                .from('guardian_elder_links')
+                .delete()
+                .eq('guardian_id', contact.id)
+                .eq('elder_id', user!.id);
+              if (filterGid === contact.id) setFilterGid(null);
+              await fetchContacts();
+              void fetchMemos();
+            } catch (e: any) { Alert.alert('Error', e.message); }
+          },
+        },
+      ],
+    );
+  }, [user, filterGid, fetchContacts, fetchMemos]);
+
+  // ── Elder: filter displayed memos by guardian chip ───────────────────────────
+  const displayedMemos = useMemo(() => {
+    if (isGuardian) return memos; // guardian already filtered by activeId in query
+    if (!filterGid)  return memos;
+    return memos.filter(m =>
+      m.sender_id === filterGid || m.receiver_id === filterGid,
+    );
+  }, [memos, filterGid, isGuardian]);
+
+  const unreadCount = useMemo(
+    () => memos.filter(m => m.receiver_id === user?.id && !m.is_read).length,
+    [memos, user?.id],
+  );
+
+  // ── List items ───────────────────────────────────────────────────────────────
+  const listItems = useMemo(
+    () => buildList(displayedMemos, contactMap),
+    [displayedMemos, contactMap],
+  );
+
+  const renderItem = useCallback(({ item }: { item: ListItem }) => {
+    if (item.kind === 'date') {
+      return (
+        <View style={s.dateRow}>
+          <View style={s.dateLine} />
+          <Text style={s.dateLbl}>{item.label}</Text>
+          <View style={s.dateLine} />
+        </View>
+      );
+    }
+    const isOwn = item.memo.sender_id === user?.id;
+    if (item.memo.type === 'text') {
+      return (
+        <NoteCard
+          memo={item.memo}
+          contactColor={item.contactColor}
+          isOwn={isOwn}
+          onDelete={deleteMemo}
+        />
+      );
+    }
+    return (
+      <MemoCard
+        memo={item.memo}
+        contactColor={item.contactColor}
+        isOwn={isOwn}
+        playingId={playingId}
+        onPlay={id  => setPlayingId(id)}
+        onStop={() => setPlayingId(null)}
+        onDelete={deleteMemo}
+      />
+    );
+  }, [user?.id, playingId, deleteMemo]);
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+  const activeContact = contacts.find(c => c.id === activeId);
+
+  return (
+    <KeyboardAvoidingView
+      style={[s.root, { paddingTop: insets.top }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      {/* ── Header ── */}
+      <LinearGradient
+        colors={['#1A3050', '#243D6A']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={s.header}
+      >
+        <Pressable style={s.backBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </Pressable>
+
+        <View style={{ flex: 1 }}>
+          <Text style={s.headerTitle}>
+            {isGuardian ? 'Voice Memos' : 'Voice Memos from Family'}
+          </Text>
+          {unreadCount > 0 && (
+            <Text style={s.headerSub}>
+              {unreadCount} new memo{unreadCount > 1 ? 's' : ''}
+            </Text>
+          )}
+        </View>
+
+        <View style={s.headerMic}>
+          <Ionicons name="mic" size={20} color="rgba(255,255,255,0.6)" />
+        </View>
+      </LinearGradient>
+
+      {/* ── Expiry notice ── */}
+      <View style={s.expiryBanner}>
+        <Ionicons name="time-outline" size={13} color="#7A90A4" />
+        <Text style={s.expiryTxt}>Voice memos and notes are automatically deleted after 7 days</Text>
+      </View>
+
+      {/* ── Guardian: elder selector chips ── */}
+      {isGuardian && contacts.length > 1 && (
+        <View style={s.chipStrip}>
+          <Text style={s.chipStripLabel}>Send to:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {contacts.map(c => (
+              <Pressable
+                key={c.id}
+                style={[s.chip, activeId === c.id && { backgroundColor: c.color }]}
+                onPress={() => setActiveId(c.id)}
+              >
+                <View style={[s.chipDot, { backgroundColor: activeId === c.id ? '#fff' : c.color }]} />
+                <Text style={[s.chipTxt, activeId === c.id && { color: '#fff' }]}>
+                  {c.name.split(' ')[0]}
+                </Text>
+                {activeId === c.id && (
+                  <Ionicons name="checkmark" size={13} color="#fff" />
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── Elder: guardian filter chips (show only when multiple guardians) ── */}
+      {!isGuardian && contacts.length > 1 && (
+        <View style={s.chipStrip}>
+          <Text style={s.chipStripLabel}>From:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            <Pressable
+              style={[s.chip, !filterGid && s.chipAll]}
+              onPress={() => setFilterGid(null)}
+            >
+              <Text style={[s.chipTxt, !filterGid && { color: C.navy, fontWeight: '900' }]}>
+                All
+              </Text>
+            </Pressable>
+            {contacts.map(c => (
+              <Pressable
+                key={c.id}
+                style={[s.chip, filterGid === c.id && { backgroundColor: c.color }]}
+                onPress={() => setFilterGid(c.id === filterGid ? null : c.id)}
+                onLongPress={() => unlinkGuardian(c)}
+              >
+                <View style={[s.chipDot, { backgroundColor: filterGid === c.id ? '#fff' : c.color }]} />
+                <Text style={[s.chipTxt, filterGid === c.id && { color: '#fff' }]}>
+                  {c.name.split(' ')[0]}
+                </Text>
+                <Ionicons
+                  name="close-circle"
+                  size={13}
+                  color={filterGid === c.id ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)'}
+                />
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── Memos list OR Recording panel ── */}
+      {isRec ? (
+        <RecordingPanel
+          secs={recSecs}
+          sending={sending}
+          bottomPad={isGuardian ? Math.max(insets.bottom, 16) : 80 + insets.bottom}
+          onCancel={cancelRec}
+          onSend={sendRec}
+        />
+      ) : (
+        <>
+          {loading ? (
+            <View style={s.center}>
+              <ActivityIndicator size="large" color={C.teal} />
+              <Text style={s.centerTxt}>Loading voice memos…</Text>
+            </View>
+          ) : contacts.length === 0 ? (
+            <View style={s.center}>
+              <View style={s.emptyIcon}>
+                <Ionicons name="people-outline" size={44} color={C.teal} />
+              </View>
+              <Text style={s.emptyTitle}>No family connected</Text>
+              <Text style={s.emptySub}>
+                {isGuardian
+                  ? 'Add an elder from the Home screen to start sending voice memos.'
+                  : 'Ask your guardian to send you an invitation to get started.'}
+              </Text>
+            </View>
+          ) : listItems.length === 0 ? (
+            <View style={s.center}>
+              <View style={s.emptyIcon}>
+                <Ionicons name="mic-outline" size={44} color={C.teal} />
+              </View>
+              <Text style={s.emptyTitle}>No voice memos yet</Text>
+              <Text style={s.emptySub}>
+                {isGuardian
+                  ? `Tap the mic button below to record\nand send a voice memo to ${activeContact?.name ?? 'your elder'}`
+                  : 'Your guardian will send you a voice\nmemo soon. You can also reply below.'}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={listItems}
+              keyExtractor={(item, i) =>
+                item.kind === 'date' ? `date-${i}` : item.memo.id
+              }
+              renderItem={renderItem}
+              contentContainerStyle={[s.list, !isGuardian && { paddingBottom: 16 }]}
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={() =>
+                listRef.current?.scrollToEnd({ animated: false })
+              }
+            />
+          )}
+
+          {/* ── Footer: note input + action buttons ── */}
+          {contacts.length > 0 && (
+            <View style={[s.recFooter, {
+              paddingBottom: isGuardian
+                ? Math.max(insets.bottom, 16)
+                : 80 + insets.bottom,   // BAR_HEIGHT(60) + ORB_LIFT(20) — notched bar is absolute-positioned
+            }]}>
+              {/* Note input panel */}
+              {showNote && (
+                <View style={s.noteInputPanel}>
+                  <TextInput
+                    style={s.noteTextInput}
+                    value={noteText}
+                    onChangeText={setNoteText}
+                    placeholder="Write a note…"
+                    placeholderTextColor={C.muted}
+                    multiline
+                    maxLength={500}
+                    autoFocus
+                  />
+                  <View style={s.noteInputActions}>
+                    <Pressable
+                      style={s.noteDiscardBtn}
+                      onPress={() => { setShowNote(false); setNoteText(''); }}
+                    >
+                      <Ionicons name="close" size={20} color={C.muted} />
+                    </Pressable>
+                    <Pressable
+                      style={[s.noteSendBtn, (!noteText.trim() || sending) && { opacity: 0.45 }]}
+                      onPress={sendNote}
+                      disabled={!noteText.trim() || sending}
+                    >
+                      {sending
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <><Ionicons name="send" size={15} color="#fff" /><Text style={s.noteSendTxt}>Send</Text></>
+                      }
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+
+              {/* Label */}
+              {isGuardian && activeContact && (
+                <Text style={s.recFooterLabel}>
+                  Sending to: <Text style={{ color: activeContact.color, fontWeight: '900' }}>
+                    {activeContact.name}
+                  </Text>
+                </Text>
+              )}
+              {!isGuardian && contacts.length > 0 && (
+                <Text style={s.recFooterLabel}>
+                  Reply to {contacts.length > 1
+                    ? `all ${contacts.length} guardians`
+                    : contacts[0].name}
+                </Text>
+              )}
+
+              {/* Button row */}
+              <View style={s.footerBtnRow}>
+                {/* Note toggle */}
+                <Pressable
+                  style={[s.noteToggleBtn, showNote && s.noteToggleBtnActive]}
+                  onPress={() => { setShowNote(!showNote); if (showNote) setNoteText(''); }}
+                >
+                  <Ionicons
+                    name="create-outline"
+                    size={22}
+                    color={showNote ? '#D97706' : C.navy}
+                  />
+                  <Text style={[s.noteToggleTxt, showNote && { color: '#D97706' }]}>Note</Text>
+                </Pressable>
+
+                {/* Mic */}
+                <Pressable
+                  style={[s.bigMicBtn, sending && { opacity: 0.6 }]}
+                  onPress={startRec}
+                  disabled={sending}
+                >
+                  <LinearGradient
+                    colors={[C.teal, '#3A8BC0']}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={s.bigMicGradient}
+                  >
+                    <Ionicons name="mic" size={28} color="#fff" />
+                  </LinearGradient>
+                  <Text style={s.bigMicTxt}>
+                    {isGuardian ? 'Tap to Record' : 'Reply with Voice'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </>
+      )}
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.bg },
+
+  // Header
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    backgroundColor: C.white,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 14,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "#F0FAFA",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 16,
-    borderWidth: 1,
-    borderColor: "#D9EDED",
-  },
-  headerTextContainer: { flex: 1 },
-  headerTitle: { fontSize: 22, fontWeight: "900", color: C.navy },
-  headerSubtitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: C.muted,
-    marginTop: 2,
-  },
-  headerRedDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#DB5461",
-    marginLeft: 6,
-    marginTop: 2,
-  },
+  backBtn:      { padding: 6 },
+  headerTitle:  { fontSize: 18, fontWeight: '900', color: '#fff' },
+  headerSub:    { fontSize: 12, fontWeight: '700', color: '#F87171', marginTop: 2 },
+  headerMic:    { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
 
-  scrollContent: { paddingHorizontal: 20, paddingTop: 10 },
+  // Expiry banner
+  expiryBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    paddingVertical: 7, paddingHorizontal: 14,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  expiryTxt: { fontSize: 12, fontWeight: '600', color: C.muted },
 
-  actionCard: {
-    backgroundColor: C.cardBg,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 30,
+  // Chips
+  chipStrip: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: '#162740',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)',
   },
-  actionCardLabel: {
-    color: "rgba(255,255,255,0.6)",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-    marginBottom: 10,
+  chipStripLabel: { fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.5)' },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  actionCardTitle: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "900",
-  },
-  actionCardSub: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 20,
-  },
-  actionButtonsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  actionBtn: {
-    width: (width - 40 - 48 - 20) / 3, // approx 1/3 minus paddings
-    borderRadius: 16,
-    padding: 14,
-    minHeight: 140,
-    borderWidth: 1,
-  },
-  actionBtnTeal: {
-    backgroundColor: C.teal,
-    borderColor: "#66C7C0",
-  },
-  actionBtnRecording: {
-    backgroundColor: "#DB5461",
-    borderColor: "#E56B77",
-  },
-  actionBtnDark: {
-    backgroundColor: "transparent",
-    borderColor: C.cardBtnBg,
-  },
-  actionBtnIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  actionBtnIconBoxDark: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: C.cardBtnBg,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  actionBtnText: {
-    color: "white",
-    fontSize: 15,
-    fontWeight: "900",
-    lineHeight: 20,
-  },
-  actionBtnSubText: {
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 4,
-  },
+  chipAll: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  chipDot: { width: 7, height: 7, borderRadius: 4 },
+  chipTxt: { fontSize: 13, fontWeight: '800', color: 'rgba(255,255,255,0.75)' },
 
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 19,
-    fontWeight: "900",
-    color: C.navy,
-  },
-  sectionAction: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: C.teal,
-  },
+  // List
+  list: { padding: 14, gap: 10, paddingBottom: 8 },
 
-  familyScroll: {
-    paddingBottom: 10,
-    marginBottom: 20,
-  },
-  familyMemberBox: {
-    alignItems: "center",
-    marginRight: 20,
-  },
-  avatarBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  avatarLetter: {
-    color: "white",
-    fontSize: 24,
-    fontWeight: "900",
-  },
-  avatarBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#EBA352",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: C.bg,
-  },
-  avatarBadgeText: {
-    color: "white",
-    fontSize: 10,
-    fontWeight: "900",
-  },
-  memberName: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: C.navy,
-  },
-  memberRel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: C.muted,
-  },
+  // Date separator
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 6 },
+  dateLine: { flex: 1, height: 1, backgroundColor: C.border },
+  dateLbl:  { fontSize: 12, fontWeight: '800', color: C.muted },
 
-  messagesContainer: {
-    backgroundColor: C.white,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "#EAEFF3",
-    marginBottom: 30,
+  // Memo card
+  memoCard: {
+    backgroundColor: C.card, borderRadius: 20, padding: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07, shadowRadius: 8, elevation: 2,
+    borderWidth: 1.5, borderColor: 'transparent',
   },
-  messageRow: {
-    flexDirection: "row",
-    padding: 16,
-    alignItems: "center",
+  memoCardUnread: {
+    borderColor: `${C.teal}60`,
+    backgroundColor: '#F4FBFB',
   },
-  messageRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F4F7",
+  unreadBadge: {
+    position: 'absolute', top: -1, right: 14,
+    backgroundColor: C.unread, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 3,
   },
-  msgAvatarBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 14,
+  unreadBadgeTxt: { fontSize: 10, fontWeight: '900', color: '#fff' },
+
+  memoTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  memoAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  memoAvatarTxt: { fontSize: 18, fontWeight: '900' },
+  memoSender: { fontSize: 15, fontWeight: '900', color: C.navy },
+  memoTime:   { fontSize: 12, fontWeight: '600', color: C.muted, marginTop: 2 },
+  durPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
   },
-  msgAvatarLetter: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  msgContentCol: {
-    flex: 1,
-  },
-  msgName: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: C.navy,
-    marginBottom: 4,
-  },
-  msgTypeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  msgTypeDesc: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: C.muted,
-    marginLeft: 6,
-  },
-  msgRightCol: {
-    alignItems: "flex-end",
-  },
-  msgTime: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: C.muted,
-    marginBottom: 8,
-  },
-  msgBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#EBA352",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  msgBadgeText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "900",
+  durTxt: { fontSize: 12, fontWeight: '800' },
+
+  // Player
+  playerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#F4F8FC', borderRadius: 16, padding: 12,
   },
   playBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F0FAFA",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#DFF0EF",
+    width: 48, height: 48, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center',
   },
-  playBtnText: {
-    color: C.teal,
-    fontSize: 12,
-    fontWeight: "800",
-    marginLeft: 4,
-  },
+  waveWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  waveBar:  { width: 3, borderRadius: 2 },
+  playLabel: { fontSize: 12, fontWeight: '700' },
 
-  whatsappCard: {
-    backgroundColor: C.whatsapp,
-    borderRadius: 24,
-    padding: 20,
-    flexDirection: "row",
-    alignItems: "center",
+  memoFooter: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 10,
   },
-  waIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
+  memoStatus:    { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  memoStatusTxt: { fontSize: 12, fontWeight: '700' },
+
+  expiryPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#F1F5F9', borderRadius: 10,
+    paddingHorizontal: 8, paddingVertical: 3,
   },
-  waContentCol: {
-    flex: 1,
-    marginLeft: 15,
+  expiryPillUrgent: { backgroundColor: '#FEF3C7' },
+  expiryPillTxt: { fontSize: 11, fontWeight: '700', color: C.muted },
+
+  // Recording panel
+  recPanel: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 32, gap: 16, backgroundColor: C.bg,
   },
-  waTitle: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "900",
+  recMicWrap: { width: 120, height: 120, alignItems: 'center', justifyContent: 'center' },
+  recRing: {
+    position: 'absolute',
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: C.danger,
+  },
+  recMicBg: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center',
+    shadowColor: C.danger, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
+  },
+  recTimer: { fontSize: 48, fontWeight: '900', color: C.navy, fontVariant: ['tabular-nums'] },
+  recHint:  { fontSize: 14, fontWeight: '600', color: C.muted },
+  recBtnRow: { flexDirection: 'row', gap: 20, marginTop: 8 },
+  recCancelBtn: {
+    alignItems: 'center', gap: 6, paddingHorizontal: 24, paddingVertical: 14,
+    borderRadius: 22, backgroundColor: '#FEE2E2',
+  },
+  recCancelTxt: { fontSize: 13, fontWeight: '900', color: C.danger },
+  recSendBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 32, paddingVertical: 14, borderRadius: 22,
+    backgroundColor: C.teal,
+    shadowColor: C.teal, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
+  },
+  recSendTxt: { fontSize: 15, fontWeight: '900', color: '#fff' },
+
+  // Empty / loading
+  center:     { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 14 },
+  centerTxt:  { fontSize: 14, fontWeight: '700', color: C.muted },
+  emptyIcon:  { width: 88, height: 88, borderRadius: 44, backgroundColor: '#E4F3F2', alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '900', color: C.navy },
+  emptySub:   { fontSize: 14, fontWeight: '600', color: C.muted, textAlign: 'center', lineHeight: 22 },
+
+  // Record footer
+  recFooter: {
+    paddingHorizontal: 20, paddingTop: 14,
+    backgroundColor: C.white,
+    borderTopWidth: 1, borderTopColor: C.border,
+    alignItems: 'center', gap: 10,
+  },
+  recFooterLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
+
+  // Footer button row (Note + Mic side-by-side)
+  footerBtnRow: {
+    flexDirection: 'row', alignItems: 'flex-end',
+    justifyContent: 'center', gap: 24, width: '100%',
+  },
+  noteToggleBtn: {
+    alignItems: 'center', gap: 5,
+    paddingHorizontal: 18, paddingVertical: 10,
+    borderRadius: 20, borderWidth: 1.5, borderColor: C.border,
+    backgroundColor: '#F4F8FC',
+  },
+  noteToggleBtnActive: {
+    borderColor: '#F59E0B', backgroundColor: '#FFF9E6',
+  },
+  noteToggleTxt: { fontSize: 12, fontWeight: '800', color: C.navy },
+
+  bigMicBtn: { alignItems: 'center' },
+  bigMicGradient: {
+    width: 68, height: 68, borderRadius: 34,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: C.teal, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45, shadowRadius: 12, elevation: 8,
+    marginBottom: 6,
+  },
+  bigMicTxt: { fontSize: 13, fontWeight: '900', color: C.navy },
+
+  // Note input panel
+  noteInputPanel: {
+    width: '100%', backgroundColor: '#FFFBF0',
+    borderRadius: 16, borderWidth: 1.5, borderColor: '#F59E0B22',
+    padding: 12, gap: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+  },
+  noteTextInput: {
+    fontSize: 15, fontWeight: '600', color: C.navy,
+    minHeight: 72, maxHeight: 140,
+    textAlignVertical: 'top',
+    lineHeight: 22,
+  },
+  noteInputActions: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  noteDiscardBtn: {
+    padding: 8, borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  noteSendBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 20, paddingVertical: 10,
+    borderRadius: 14, backgroundColor: '#D97706',
+  },
+  noteSendTxt: { fontSize: 14, fontWeight: '900', color: '#fff' },
+
+  // Note card
+  noteCard: {
+    backgroundColor: '#FFFDF0', borderRadius: 20, padding: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07, shadowRadius: 8, elevation: 2,
+    borderWidth: 1.5, borderColor: '#FDE68A55',
+  },
+  noteCardUnread: {
+    borderColor: '#F59E0B88',
+    backgroundColor: '#FFFBEB',
+  },
+  notePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+  },
+  notePillTxt: { fontSize: 12, fontWeight: '800' },
+  noteBody: {
+    backgroundColor: '#FFFFF8', borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: '#FDE68A44',
     marginBottom: 4,
   },
-  waSubTitle: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 11,
-    fontWeight: "600",
-    lineHeight: 16,
-  },
-  waOpenBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.4)",
-  },
-  waOpenText: {
-    color: "white",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: C.white,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    padding: 24,
-    minHeight: 300,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: C.navy,
-  },
-  modalClose: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F0F4F7",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  textInput: {
-    backgroundColor: "#F8F9FB",
-    borderRadius: 16,
-    padding: 16,
-    fontSize: 16,
-    color: C.navy,
-    textAlignVertical: "top",
-    minHeight: 120,
-    marginBottom: 24,
-  },
-  sendBtn: {
-    backgroundColor: C.teal,
-    borderRadius: 16,
-    paddingVertical: 16,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sendBtnText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "900",
+  noteContent: {
+    fontSize: 15, fontWeight: '600', color: C.navy,
+    lineHeight: 22,
   },
 });

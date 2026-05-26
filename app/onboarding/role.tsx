@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Image, StatusBar, ImageBackground } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { supabase } from '../../utils/supabase';
+import { useAuth } from '../../context/AuthContext';
 
 const C = {
   bg: '#FFFFFF',
@@ -20,14 +22,23 @@ const C = {
 export default function RoleSelection() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { firstName = '', lastName = '', email = '' } = useLocalSearchParams<{
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  }>();
 
-  const handleRoleSelect = (role: string) => {
-    // Navigate to register screen with selected role
-    console.log('Selected role:', role);
-    router.push({
-      pathname: '/onboarding/register',
-      params: { role }
-    });
+  const handleRoleSelect = async (role: string) => {
+    if (user) {
+      await supabase.from('profiles').update({ role }).eq('id', user.id);
+    }
+    const socialParams = { firstName, lastName, email };
+    if (role === 'guardian') {
+      router.push({ pathname: '/onboarding/name' as any, params: { role: 'guardian', ...socialParams } });
+    } else {
+      router.push({ pathname: '/onboarding/name' as any, params: socialParams });
+    }
   };
 
   return (
@@ -45,7 +56,7 @@ export default function RoleSelection() {
           <View style={styles.logoRow}>
             <View style={styles.logoIconBrand}>
               <Image
-                source={require('../../assets/images/logo.png')}
+                source={require('../../assets/images/TinyBit_LOGO_New.png')}
                 style={styles.logoImageBrand}
                 resizeMode="contain"
               />

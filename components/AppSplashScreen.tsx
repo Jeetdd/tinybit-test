@@ -1,5 +1,5 @@
-import { View, StyleSheet, Text, Dimensions, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Dimensions, Image, StyleSheet, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 
 const { width, height } = Dimensions.get('window');
@@ -19,19 +19,19 @@ export default function AppSplashScreen({ logoSvg }: AppSplashScreenProps) {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
-      
+
       <View style={styles.content}>
         {logoSvg ? (
           <SvgXml xml={logoSvg} width={width * 0.4} height={width * 0.4} />
         ) : (
-          <Image 
-            source={require('../assets/images/logo.png')} 
-            style={styles.logoImage} 
+          <Image
+            source={require('../assets/images/TinyBit_LOGO_New.png')}
+            style={styles.logoImage}
             resizeMode="contain"
           />
         )}
-        
-        <Text style={styles.tagline}>Elderly AI</Text>
+
+        <Text style={styles.tagline}>Elderly Care AI</Text>
       </View>
     </View>
   );
@@ -56,13 +56,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   logoImage: {
-    width: width * 0.4,
-    height: width * 0.4,
+    width: width * 0.5,
+    height: width * 0.5,
     marginBottom: 20,
   },
   tagline: {
-    marginTop: 20,
-    fontSize: 18,
+    marginTop: -20,
+    fontSize: 28,
     fontWeight: '600',
     color: '#000',
     letterSpacing: 0.5,

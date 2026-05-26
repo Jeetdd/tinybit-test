@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,17 +10,26 @@ import {
   Modal,
   Platform,
   Alert,
+  ActivityIndicator,
+  Linking,
+  TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInUp, FadeOutDown } from "react-native-reanimated";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../utils/supabase";
+import { API_BASE_URL } from "../../config/api";
+import { notifyGuardiansOf, notifyElderOf } from "../../services/notifications";
+import CountryPickerModal from "../../components/CountryPickerModal";
+import { DEFAULT_COUNTRY, type Country } from "../../constants/countries";
 
 const C = {
   navy:           "#1A2E6A",
@@ -30,174 +39,390 @@ const C = {
   muted:          "#8A9BB0",
   accent:         "#37B1E6",
   border:         "#E4EBF2",
-  iconBg:         "#1B6EB5",
   bloodPinkBg:    "#FDEAF0",
   bloodPinkText:  "#E05A7A",
   prescGreenBg:   "#E6F9F1",
   prescGreenText: "#10B981",
   purpleBg:       "#EEE8FF",
   purpleText:     "#7C5CFC",
+  xrayBg:         "#F1F5F9",
+  xrayText:       "#64748B",
 };
 
 type HealthRecord = {
-  id: string | number;
+  id: string;
   title: string;
   date: string;
   timestamp: number;
   size: string;
   type: string;
   category: string;
-  iconName: string;
-  badgeBg: string;
-  badgeColor: string;
+  icon_name: string;
+  badge_bg: string;
+  badge_color: string;
   uri?: string;
+  mime_type?: string | null;
   user_id?: string;
+  ai_read?: boolean;
 };
 
-const DEFAULT_RECORDS: HealthRecord[] = [
-  {
-    id: 1,
-    title: "Blood Sugar Report",
-    date: "5 March 2026",
-    timestamp: new Date("2026-03-05").getTime(),
-    size: "1.2 MB",
-    type: "Blood Test . AI Read",
-    category: "Reports",
-    iconName: "water",
-    badgeBg: C.bloodPinkBg,
-    badgeColor: C.bloodPinkText,
-  },
-  {
-    id: 2,
-    title: "Dr Mehta Prescription",
-    date: "5 March 2026",
-    timestamp: new Date("2026-03-05").getTime() - 1000,
-    size: "1.2 MB",
-    type: "Prescription . AI Read",
-    category: "Prescriptions",
-    iconName: "create-outline",
-    badgeBg: C.prescGreenBg,
-    badgeColor: C.prescGreenText,
-  },
-  {
-    id: 3,
-    title: "ECG Reports",
-    date: "5 March 2026",
-    timestamp: new Date("2026-03-05").getTime() - 2000,
-    size: "1.2 MB",
-    type: "Blood Test . AI Read",
-    category: "Reports",
-    iconName: "heart-outline",
-    badgeBg: C.purpleBg,
-    badgeColor: C.purpleText,
-  },
-];
+type Doctor = {
+  name: string;
+  phone: string | null;
+};
 
-const FILTERS = ["All", "Reports", "Prescriptions", "X-Rays", "Blood Tests"];
-const FILTER_LABELS = ["All", "Reports", "Prescription", "X-Rays", "Blood Tests"];
+type FileInfo = { uri: string; name: string; size?: number; mimeType?: string };
 
-function iconForCategory(cat: string) {
+const CATEGORIES = ["Reports", "Prescriptions", "X-Rays"] as const;
+type Category = typeof CATEGORIES[number];
+
+const FILTERS = ["All", ...CATEGORIES];
+const FILTER_LABELS = ["All", "Reports", "Prescription", "X-Rays"];
+
+function iconForCategory(cat: string): string {
   switch (cat) {
-    case "Reports":       return "water";
+    case "Reports":       return "document-text-outline";
     case "Prescriptions": return "create-outline";
     case "X-Rays":        return "scan-outline";
-    case "Blood Tests":   return "heart-outline";
     default:              return "document-text-outline";
   }
 }
-function badgeBgForCategory(cat: string) {
+function badgeBgForCategory(cat: string): string {
   switch (cat) {
-    case "Reports":       return C.bloodPinkBg;
+    case "Reports":       return C.purpleBg;
     case "Prescriptions": return C.prescGreenBg;
-    case "X-Rays":        return "#F1F5F9";
-    case "Blood Tests":   return C.bloodPinkBg;
+    case "X-Rays":        return C.xrayBg;
     default:              return C.purpleBg;
   }
 }
-function badgeColorForCategory(cat: string) {
+function badgeColorForCategory(cat: string): string {
   switch (cat) {
-    case "Reports":       return C.bloodPinkText;
+    case "Reports":       return C.purpleText;
     case "Prescriptions": return C.prescGreenText;
-    case "X-Rays":        return "#64748B";
-    case "Blood Tests":   return C.bloodPinkText;
+    case "X-Rays":        return C.xrayText;
     default:              return C.purpleText;
+  }
+}
+
+async function callAnalyzeReport(
+  base64: string,
+  mimeType: string,
+  token: string,
+): Promise<{ isReport: boolean; category: Category | null } | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/ai/analyze-report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ base64, mimeType }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.data ?? null;
+  } catch {
+    return null;
   }
 }
 
 export default function HealthVaultScreen() {
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const params   = useLocalSearchParams<{ elderId?: string; elderName?: string }>();
 
-  const [activeFilter,         setActiveFilter]         = useState("All");
-  const [isUploadModalVisible, setIsUploadModalVisible] = useState(false);
-  const [isCategoryModal,      setIsCategoryModal]      = useState(false);
-  const [selectedFile,         setSelectedFile]         = useState<any>(null);
-  const [records,              setRecords]              = useState<HealthRecord[]>([]);
+  // When a guardian navigates here with ?elderId=xxx, all DB ops target that elder
+  const targetUserId = (params.elderId as string | undefined) ?? user?.id;
+  const isGuardianView = !!params.elderId;
+  const elderName = params.elderName as string | undefined;
 
-  useEffect(() => { loadRecords(); }, [user]);
+  const [activeFilter,     setActiveFilter]     = useState("All");
+  const [records,          setRecords]          = useState<HealthRecord[]>([]);
+  const [doctors,          setDoctors]          = useState<Doctor[]>([]);
+  const [loadingRecords,   setLoadingRecords]   = useState(false);
+
+  // Upload flow
+  const [isUploadModal,    setIsUploadModal]    = useState(false);
+  const [aiLoading,        setAiLoading]        = useState(false);
+  const [notReportModal,   setNotReportModal]   = useState(false);
+
+  // View record
+  const [viewingRecord,    setViewingRecord]    = useState<HealthRecord | null>(null);
+
+  // Edit record
+  const [editingRecord,    setEditingRecord]    = useState<HealthRecord | null>(null);
+  const [editTitle,        setEditTitle]        = useState('');
+  const [editCategory,     setEditCategory]     = useState<Category>('Reports');
+  const [savingEdit,       setSavingEdit]       = useState(false);
+
+  // Share to doctor
+  const [sharePickerModal, setSharePickerModal] = useState(false);
+  const [sharingDoctor,    setSharingDoctor]    = useState<Doctor | null>(null);
+
+  // Add doctor
+  const [addDoctorModal,     setAddDoctorModal]     = useState(false);
+  const [newDoctorName,      setNewDoctorName]      = useState('');
+  const [newDoctorPhone,     setNewDoctorPhone]     = useState('');
+  const [doctorCountry,      setDoctorCountry]      = useState<Country>(DEFAULT_COUNTRY);
+  const [countryPickerOpen,  setCountryPickerOpen]  = useState(false);
+  const [savingDoctor,       setSavingDoctor]        = useState(false);
+
+  useEffect(() => {
+    void loadAll();
+
+    if (!targetUserId) return;
+
+    const channel = supabase
+      .channel(`health-records-${targetUserId}`)
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'health_records', filter: `user_id=eq.${targetUserId}` },
+        () => { void loadRecords(); },
+      )
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [user, targetUserId]);
+
+  const loadAll = useCallback(async () => {
+    setLoadingRecords(true);
+    try {
+      await Promise.all([loadRecords(), loadDoctors()]);
+    } finally {
+      setLoadingRecords(false);
+    }
+  }, [user, targetUserId]);
 
   const loadRecords = async () => {
-    try {
-      let db: HealthRecord[] = [];
-      if (user) {
-        const { data, error } = await supabase
-          .from("health_records")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("timestamp", { ascending: false });
-        if (!error && data) db = data as HealthRecord[];
+    if (!targetUserId) return;
+    const { data, error } = await supabase
+      .from("health_records")
+      .select("*")
+      .eq("user_id", targetUserId)
+      .order("timestamp", { ascending: false });
+    if (!error && data) setRecords(data as HealthRecord[]);
+  };
+
+  const loadDoctors = async () => {
+    if (!targetUserId) return;
+    const seen = new Set<string>();
+    const result: Doctor[] = [];
+
+    const [medsRes, docRes] = await Promise.all([
+      supabase.from("medicines").select("prescribed_by, doctor_phone").eq("user_id", targetUserId).not("prescribed_by", "is", null),
+      supabase.from("user_doctors").select("name, phone").eq("user_id", targetUserId),
+    ]);
+
+    for (const row of (medsRes.data ?? []) as any[]) {
+      if (row.prescribed_by && !seen.has(row.prescribed_by)) {
+        seen.add(row.prescribed_by);
+        result.push({ name: row.prescribed_by, phone: row.doctor_phone ?? null });
       }
-      setRecords([...db, ...DEFAULT_RECORDS].sort((a, b) => b.timestamp - a.timestamp));
-    } catch {
-      setRecords(DEFAULT_RECORDS);
+    }
+    for (const row of (docRes.data ?? []) as any[]) {
+      if (row.name && !seen.has(row.name)) {
+        seen.add(row.name);
+        result.push({ name: row.name, phone: row.phone ?? null });
+      }
+    }
+    setDoctors(result);
+  };
+
+  const handleAddDoctor = async () => {
+    if (!newDoctorName.trim() || !targetUserId) return;
+    setSavingDoctor(true);
+    try {
+      const phone = newDoctorPhone.trim()
+        ? `${doctorCountry.dial}${newDoctorPhone.trim()}`
+        : null;
+      const { error } = await supabase.from("user_doctors").insert({
+        user_id: targetUserId,
+        name: newDoctorName.trim(),
+        phone,
+      });
+      if (error) {
+        Alert.alert("Could not save doctor", error.message);
+        return;
+      }
+      setNewDoctorName('');
+      setNewDoctorPhone('');
+      setAddDoctorModal(false);
+      await loadDoctors();
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Something went wrong");
+    } finally {
+      setSavingDoctor(false);
     }
   };
 
-  const saveRecord = async (category: string) => {
-    if (!selectedFile) return;
+  // ── Core save ──────────────────────────────────────────────────
+
+  const saveRecord = async (file: FileInfo, category: Category) => {
+    if (!targetUserId) return;
+
+    // Upload to Supabase Storage so the file is accessible cross-device
+    let storageUri = file.uri;
     try {
-      const rec: HealthRecord = {
-        id:         "rec_" + Date.now(),
-        title:      selectedFile.name || "Health Record",
-        date:       new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
-        timestamp:  Date.now(),
-        size:       selectedFile.size ? (selectedFile.size / 1048576).toFixed(1) + " MB" : "0.5 MB",
-        type:       category + " . AI Read",
-        category,
-        iconName:   iconForCategory(category),
-        badgeBg:    badgeBgForCategory(category),
-        badgeColor: badgeColorForCategory(category),
-        uri:        selectedFile.uri,
-      };
-      if (user) await supabase.from("health_records").insert([{ ...rec, user_id: user.id }]);
-      await loadRecords();
-      setIsCategoryModal(false);
-      setSelectedFile(null);
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = `${targetUserId}/${Date.now()}_${safeName}`;
+      const mimeType = file.mimeType ?? 'application/octet-stream';
+
+      const response = await fetch(file.uri);
+      const blob = await response.blob();
+
+      const { error: uploadError } = await supabase.storage
+        .from('health-records')
+        .upload(storagePath, blob, { contentType: mimeType, upsert: false });
+
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage
+          .from('health-records')
+          .getPublicUrl(storagePath);
+        storageUri = urlData.publicUrl;
+      }
     } catch {
-      Alert.alert("Error", "Could not save the record.");
+      // Fall back to local URI silently
     }
+
+    const rec = {
+      user_id:     targetUserId,
+      title:       file.name.replace(/_\d+$/, "").replace(/_/g, " ") || "Health Record",
+      date:        new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+      timestamp:   Date.now(),
+      size:        file.size ? (file.size / 1048576).toFixed(1) + " MB" : "—",
+      type:        category,
+      category,
+      icon_name:   iconForCategory(category),
+      badge_bg:    badgeBgForCategory(category),
+      badge_color: badgeColorForCategory(category),
+      uri:         storageUri,
+      mime_type:   file.mimeType ?? null,
+      ai_read:     true,
+    };
+    const { error } = await supabase.from("health_records").insert([rec]);
+    if (error) {
+      Alert.alert("Error", `Could not save the record: ${error.message}`);
+      return;
+    }
+    await loadRecords();
+
+    // Notify the other party (non-blocking)
+    if (user?.id) {
+      const recTitle = rec.title;
+      if (isGuardianView && targetUserId) {
+        // Guardian uploaded for elder → notify elder
+        notifyElderOf(
+          targetUserId, user.id,
+          'health_record_uploaded',
+          '📁 New Health Record',
+          `Your guardian added "${recTitle}" to your Health Vault`,
+        );
+      } else {
+        // Elder uploaded their own record → notify guardians
+        notifyGuardiansOf(
+          user.id, user.id,
+          'health_record_uploaded',
+          '📁 Health Record Uploaded',
+          `${profile?.firstName || 'Your elder'} added "${recTitle}" to their Health Vault`,
+        );
+      }
+    }
+  };
+
+  const deleteRecord = (r: HealthRecord) => {
+    Alert.alert("Delete Record", `Remove "${r.title}"?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete", style: "destructive",
+        onPress: async () => {
+          await supabase.from("health_records").delete().eq("id", r.id).eq("user_id", targetUserId ?? "");
+          await loadRecords();
+        },
+      },
+    ]);
+  };
+
+  const openEdit = (r: HealthRecord) => {
+    setEditingRecord(r);
+    setEditTitle(r.title);
+    setEditCategory((r.category as Category) ?? 'Reports');
+  };
+
+  const handleEditSave = async () => {
+    if (!editingRecord || !editTitle.trim()) return;
+    setSavingEdit(true);
+    try {
+      const cat = editCategory;
+      const { error } = await supabase
+        .from("health_records")
+        .update({
+          title:       editTitle.trim(),
+          category:    cat,
+          type:        cat,
+          icon_name:   iconForCategory(cat),
+          badge_bg:    badgeBgForCategory(cat),
+          badge_color: badgeColorForCategory(cat),
+        })
+        .eq("id", editingRecord.id)
+        .eq("user_id", targetUserId ?? "");
+      if (error) { Alert.alert("Error", error.message); return; }
+      setEditingRecord(null);
+      await loadRecords();
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // ── Upload handlers ────────────────────────────────────────────
+
+  const getToken = async (): Promise<string | null> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  };
+
+  // For images: AI detects category automatically, no user prompt
+  const processImage = async (uri: string, name: string, base64: string, mimeType: string) => {
+    setIsUploadModal(false);
+    setAiLoading(true);
+
+    const token = await getToken();
+    const aiResult = token ? await callAnalyzeReport(base64, mimeType, token) : null;
+
+    if (!aiResult) {
+      setAiLoading(false);
+      Alert.alert("AI Unavailable", "Could not analyze the document. Please check your connection and try again.");
+      return;
+    }
+
+    if (!aiResult.isReport) {
+      setAiLoading(false);
+      setNotReportModal(true);
+      return;
+    }
+
+    // Keep overlay visible during storage upload
+    const category: Category = aiResult.category ?? "Reports";
+    await saveRecord({ uri, name, mimeType }, category);
+    setAiLoading(false);
   };
 
   const handleCamera = async () => {
     const { granted } = await ImagePicker.requestCameraPermissionsAsync();
     if (!granted) return;
-    const res = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 1 });
+    const res = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7, base64: true });
     if (!res.canceled && res.assets?.[0]) {
-      setIsUploadModalVisible(false);
-      setSelectedFile({ uri: res.assets[0].uri, name: "Scan_" + Date.now() });
-      setIsCategoryModal(true);
+      const a = res.assets[0];
+      if (!a.base64) return;
+      await processImage(a.uri, "Scan_" + Date.now(), a.base64, a.mimeType ?? "image/jpeg");
     }
   };
 
   const handleGallery = async () => {
     const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!granted) return;
-    const res = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 1 });
+    const res = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 0.7, base64: true });
     if (!res.canceled && res.assets?.[0]) {
-      setIsUploadModalVisible(false);
-      setSelectedFile({ uri: res.assets[0].uri, name: "Image_" + Date.now() });
-      setIsCategoryModal(true);
+      const a = res.assets[0];
+      if (!a.base64) return;
+      await processImage(a.uri, "Image_" + Date.now(), a.base64, a.mimeType ?? "image/jpeg");
     }
   };
 
@@ -205,17 +430,107 @@ export default function HealthVaultScreen() {
     try {
       const res = await DocumentPicker.getDocumentAsync({ type: ["application/pdf", "image/*"] });
       if (!res.canceled && res.assets?.[0]) {
-        setIsUploadModalVisible(false);
-        setSelectedFile({ uri: res.assets[0].uri, name: res.assets[0].name, size: res.assets[0].size });
-        setIsCategoryModal(true);
+        const a = res.assets[0];
+        setIsUploadModal(false);
+        setAiLoading(true);
+
+        let base64: string | null = null;
+        try {
+          base64 = await FileSystem.readAsStringAsync(a.uri, { encoding: 'base64' as any });
+        } catch { /* unreadable file, skip AI */ }
+
+        if (base64) {
+          const token = await getToken();
+          const aiResult = token
+            ? await callAnalyzeReport(base64, a.mimeType ?? "application/pdf", token)
+            : null;
+
+          if (!aiResult) {
+            setAiLoading(false);
+            Alert.alert("AI Unavailable", "Could not analyze the document. Please check your connection and try again.");
+            return;
+          }
+          if (!aiResult.isReport) {
+            setAiLoading(false);
+            setNotReportModal(true);
+            return;
+          }
+          // Keep overlay visible during storage upload
+          await saveRecord(
+            { uri: a.uri, name: a.name, size: a.size ?? undefined, mimeType: a.mimeType ?? "application/pdf" },
+            aiResult.category ?? "Reports",
+          );
+          setAiLoading(false);
+        } else {
+          // Keep overlay visible during storage upload
+          await saveRecord(
+            { uri: a.uri, name: a.name, size: a.size ?? undefined, mimeType: a.mimeType ?? "application/pdf" },
+            "Reports",
+          );
+          setAiLoading(false);
+        }
       }
     } catch { /* cancelled */ }
   };
 
-  const handleShare = async (r: HealthRecord) => {
-    if (r.uri) await Sharing.shareAsync(r.uri);
-    else Alert.alert("Notice", "Sharing not available for sample records.");
+  // ── View ───────────────────────────────────────────────────────
+
+  const handleView = (r: HealthRecord) => {
+    if (!r.uri) { Alert.alert("Not Available", "This record has no file attached."); return; }
+
+    const mime = r.mime_type ?? "";
+    const isImage =
+      mime.startsWith("image/") ||
+      (!mime && (
+        r.uri.includes("ImagePicker") ||
+        r.uri.includes("Camera") ||
+        /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(r.uri)
+      ));
+
+    if (isImage) {
+      setViewingRecord(r);
+    } else {
+      // Try to open with device's native viewer first, fall back to share sheet
+      Linking.canOpenURL(r.uri).then((can) => {
+        if (can) {
+          Linking.openURL(r.uri!).catch(() => Alert.alert('Cannot Open', 'Unable to open this file'));
+        } else {
+          Sharing.shareAsync(r.uri!).catch(() =>
+            Alert.alert("Cannot Open", "Unable to open this file on your device.")
+          );
+        }
+      }).catch(() => {
+        Sharing.shareAsync(r.uri!).catch(() =>
+          Alert.alert("Cannot Open", "Unable to open this file on your device.")
+        );
+      });
+    }
   };
+
+  // ── Share ──────────────────────────────────────────────────────
+
+  const handleShareToDoctor = (doctor: Doctor) => {
+    if (records.length === 0) { Alert.alert("No Records", "Upload a report first to share."); return; }
+    setSharingDoctor(doctor);
+    setSharePickerModal(true);
+  };
+
+  const handleShareRecord = async (r: HealthRecord) => {
+    setSharePickerModal(false);
+    if (!r.uri) { Alert.alert("No File", "This record has no file to share."); return; }
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(r.uri, { dialogTitle: `Share with ${sharingDoctor?.name ?? "Doctor"}` });
+    } else {
+      Alert.alert(
+        "Share",
+        `Doctor: ${sharingDoctor?.name}\nPhone: ${sharingDoctor?.phone ?? "N/A"}\n\nSharing not supported on this device.`,
+      );
+    }
+    setSharingDoctor(null);
+  };
+
+  // ── Derived ────────────────────────────────────────────────────
 
   const filtered = activeFilter === "All" ? records : records.filter(r => r.category === activeFilter);
 
@@ -223,24 +538,28 @@ export default function HealthVaultScreen() {
     reports: records.filter(r => r.category === "Reports").length,
     presc:   records.filter(r => r.category === "Prescriptions").length,
     xray:    records.filter(r => r.category === "X-Rays").length,
-    blood:   records.filter(r => r.category === "Blood Tests" || r.type.includes("Blood")).length,
   };
 
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* ── Gradient Header ── */}
+      {/* ── Header ── */}
       <LinearGradient
         colors={["#1B3A5C", "#2B7FC0"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[s.header, { paddingTop: insets.top + 12 }]}
       >
-        <Pressable onPress={() => router.back()} style={s.backBtn}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.backBtn}>
           <Ionicons name="chevron-back" size={20} color={C.navyDark} />
         </Pressable>
-        <Text style={s.headerTitle}>Health Vault</Text>
+        <View>
+          <Text style={s.headerTitle}>Health Vault</Text>
+          {isGuardianView && elderName ? (
+            <Text style={s.headerSub}>{elderName}</Text>
+          ) : null}
+        </View>
       </LinearGradient>
 
       <ScrollView
@@ -249,30 +568,27 @@ export default function HealthVaultScreen() {
       >
         {/* ── Summary Card ── */}
         <Animated.View entering={FadeInDown.delay(80)} style={s.card}>
-          <Text style={s.cardLabel}>Your Health Record</Text>
+          <Text style={s.cardLabel}>{isGuardianView ? `${elderName ?? "Elder"}'s Records` : "Your Health Records"}</Text>
           <Text style={s.cardBig}>All Documents</Text>
           <Text style={s.cardSub}>
-            {counts.reports + counts.presc + counts.xray} Memories shared . Family loves reading these
+            {counts.reports + counts.presc + counts.xray} records stored safely
           </Text>
-
           <View style={s.statsRow}>
             <Stat n={counts.reports} label="Reports" />
             <View style={s.divider} />
             <Stat n={counts.presc}   label="Prescription" />
             <View style={s.divider} />
             <Stat n={counts.xray}    label="X-Rays" />
-            <View style={s.divider} />
-            <Stat n={counts.blood}   label="Blood Test" />
           </View>
         </Animated.View>
 
-        {/* ── Scan Prescription Card ── */}
+        {/* ── Scan Card ── */}
         <Animated.View entering={FadeInDown.delay(160)}>
-          <Pressable onPress={() => setIsUploadModalVisible(true)} style={s.scanCard}>
+          <Pressable onPress={() => setIsUploadModal(true)} style={s.scanCard}>
             <View style={{ flex: 1 }}>
-              <Text style={s.scanLabel}>Your life story</Text>
-              <Text style={s.scanTitle}>Scan Presciption</Text>
-              <Text style={s.scanSub}>Take photo . AI reads it for you</Text>
+              <Text style={s.scanLabel}>Your health story</Text>
+              <Text style={s.scanTitle}>Scan Prescription</Text>
+              <Text style={s.scanSub}>Take photo · AI reads & sorts it for you</Text>
             </View>
             <Image
               source={require("../../assets/images/ScanPrescrption.png")}
@@ -302,131 +618,364 @@ export default function HealthVaultScreen() {
           ))}
         </ScrollView>
 
-        {/* ── Recent Records ── */}
+        {/* ── Records ── */}
         <View style={s.secHeader}>
           <Text style={s.secTitle}>Recent Records</Text>
-          <Pressable><Text style={s.viewAll}>View all</Text></Pressable>
         </View>
 
         <View style={s.list}>
-          {filtered.slice(0, 3).map((r, i) => (
-            <Animated.View key={r.id.toString()} entering={FadeInDown.delay(240 + i * 70)} style={s.recCard}>
-              {/* Row 1 */}
-              <View style={s.recRow}>
-                <View style={s.iconCircle}>
-                  <Ionicons name={r.iconName as any} size={22} color={C.white} />
-                </View>
-                <View style={s.recMid}>
-                  <Text style={s.recTitle}>{r.title}</Text>
-                  <Text style={s.recDate}>{r.date}</Text>
-                </View>
-                <Pressable style={s.viewBtn}>
-                  <Text style={s.viewBtnText}>View</Text>
-                </Pressable>
-              </View>
-              {/* Row 2 */}
-              <View style={s.recBottom}>
-                <View style={[s.badge, { backgroundColor: r.badgeBg }]}>
-                  <Text style={[s.badgeText, { color: r.badgeColor }]}>{r.type}</Text>
-                </View>
-                <Text style={s.recSize}>{r.size}</Text>
-              </View>
-            </Animated.View>
-          ))}
-
-          {filtered.length === 0 && (
+          {loadingRecords ? (
+            <ActivityIndicator color={C.accent} style={{ paddingVertical: 32 }} />
+          ) : filtered.length === 0 ? (
             <View style={s.emptyBox}>
-              <Text style={s.emptyText}>No records in this category</Text>
+              <Ionicons name="folder-open-outline" size={48} color={C.muted} />
+              <Text style={s.emptyText}>No records yet</Text>
+              <Text style={s.emptySubText}>Tap "Scan Prescription" above to add your first document</Text>
             </View>
+          ) : (
+            filtered.map((r, i) => (
+              <Animated.View key={r.id} entering={FadeInDown.delay(240 + i * 60)} style={s.recCard}>
+                <View style={s.recRow}>
+                  <View style={[s.iconCircle, { backgroundColor: badgeBgForCategory(r.category) }]}>
+                    <Ionicons name={(r.icon_name || "document-text-outline") as any} size={22} color={badgeColorForCategory(r.category)} />
+                  </View>
+                  <View style={s.recMid}>
+                    <Text style={s.recTitle} numberOfLines={1}>{r.title}</Text>
+                    <Text style={s.recDate}>{r.date}</Text>
+                  </View>
+                  <View style={s.recActions}>
+                    <Pressable hitSlop={8} style={s.actionIconBtn} onPress={() => handleView(r)}>
+                      <Ionicons name="eye-outline" size={24} color={C.accent} />
+                    </Pressable>
+                    <Pressable hitSlop={8} style={s.actionIconBtn} onPress={() => openEdit(r)}>
+                      <Ionicons name="create-outline" size={22} color="#F4A46A" />
+                    </Pressable>
+                    <Pressable hitSlop={8} style={s.actionIconBtn} onPress={async () => {
+                      if (!r.uri) { Alert.alert("No File", "This record has no file to share."); return; }
+                      const ok = await Sharing.isAvailableAsync();
+                      if (ok) Sharing.shareAsync(r.uri);
+                      else Alert.alert("Sharing not supported on this device.");
+                    }}>
+                      <Ionicons name="share-outline" size={24} color={C.accent} />
+                    </Pressable>
+                    <Pressable onPress={() => deleteRecord(r)} hitSlop={8} style={s.actionIconBtn}>
+                      <Ionicons name="trash-outline" size={24} color="#E05A7A" />
+                    </Pressable>
+                  </View>
+                </View>
+                <View style={s.recBottom}>
+                  <View style={[s.badge, { backgroundColor: r.badge_bg || badgeBgForCategory(r.category) }]}>
+                    <Text style={[s.badgeText, { color: r.badge_color || badgeColorForCategory(r.category) }]}>
+                      {r.category}{r.ai_read ? " · AI Read" : ""}
+                    </Text>
+                  </View>
+                  <Text style={s.recSize}>{r.size}</Text>
+                </View>
+              </Animated.View>
+            ))
           )}
         </View>
 
-        {/* ── Share Records ── */}
-        <View style={[s.secHeader, { marginTop: 4 }]}>
-          <Text style={s.secTitle}>Share Records</Text>
-        </View>
-
-        <Animated.View
-          entering={FadeInDown.delay(520)}
-          style={[s.recCard, { marginHorizontal: 16, marginBottom: 12 }]}
-        >
-          <View style={s.recRow}>
-            <View style={s.iconCircle}>
-              <Ionicons name="arrow-up-circle-outline" size={22} color={C.white} />
-            </View>
-            <View style={s.recMid}>
-              <Text style={s.recTitle}>Share with Dr Mehta</Text>
-              <Text style={s.recDate}>Next Apointment :- 14 th March 26</Text>
-            </View>
-            <Pressable
-              style={s.shareBtn}
-              onPress={() => records.length > 0 ? handleShare(records[0]) : Alert.alert("Vault Empty", "No records to share.")}
-            >
-              <Text style={s.shareBtnText}>Share</Text>
+        {/* ── My Doctors ── */}
+        <>
+          <View style={s.secHeader}>
+            <Text style={s.secTitle}>My Doctors</Text>
+            <Pressable onPress={() => setAddDoctorModal(true)}>
+              <Text style={s.secSub}>+ Add Doctor</Text>
             </Pressable>
           </View>
-          <View style={s.recBottom}>
-            <View style={[s.badge, { backgroundColor: C.purpleBg }]}>
-              <Text style={[s.badgeText, { color: C.purpleText }]}>Blood Test . AI Read</Text>
+          {doctors.length > 0 && (
+            <View style={[s.list, { marginTop: 0 }]}>
+              {doctors.map((doc, i) => (
+                <Animated.View key={doc.name} entering={FadeInDown.delay(300 + i * 60)} style={s.recCard}>
+                  <View style={s.recRow}>
+                    <View style={[s.iconCircle, { backgroundColor: C.prescGreenBg }]}>
+                      <Ionicons name="person-outline" size={22} color={C.prescGreenText} />
+                    </View>
+                    <View style={s.recMid}>
+                      <Text style={s.recTitle}>{doc.name}</Text>
+                      {doc.phone ? (
+                        <Pressable onPress={() => Linking.openURL(`tel:${doc.phone}`).catch(() => {})}>
+                          <Text style={[s.recDate, { color: C.accent }]}>{doc.phone} · tap to call</Text>
+                        </Pressable>
+                      ) : (
+                        <Text style={s.recDate}>No phone saved</Text>
+                      )}
+                    </View>
+                    <Pressable style={s.shareBtn} onPress={() => handleShareToDoctor(doc)}>
+                      <Ionicons name="share-outline" size={14} color={C.white} />
+                      <Text style={s.shareBtnText}>Share</Text>
+                    </Pressable>
+                  </View>
+                </Animated.View>
+              ))}
             </View>
-            <Text style={s.recSize}>1.2 MB</Text>
-          </View>
-        </Animated.View>
-
+          )}
+        </>
       </ScrollView>
+
+      {/* ── AI Loading Overlay ── */}
+      {aiLoading && (
+        <View style={s.aiOverlay}>
+          <View style={s.aiCard}>
+            <ActivityIndicator color={C.accent} size="large" />
+            <Text style={s.aiLoadingText}>Saving your document…</Text>
+            <Text style={s.aiLoadingSub}>AI reads, categorises & uploads to cloud</Text>
+          </View>
+        </View>
+      )}
 
       {/* ── Upload Modal ── */}
       <Modal
-        visible={isUploadModalVisible}
+        visible={isUploadModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setIsUploadModalVisible(false)}
+        onRequestClose={() => setIsUploadModal(false)}
       >
-        <Pressable style={s.overlay} onPress={() => setIsUploadModalVisible(false)}>
+        <Pressable style={s.overlay} onPress={() => setIsUploadModal(false)}>
           <Animated.View entering={FadeInUp} exiting={FadeOutDown} style={s.sheet}>
             <View style={s.handle} />
             <Text style={s.sheetTitle}>Upload Document</Text>
-            <Text style={s.sheetSub}>Choose a source for your record</Text>
+            <Text style={s.sheetSub}>AI will auto-detect and save the category for you</Text>
             <View style={s.sheetOptions}>
-              <UploadRow icon="camera"        label="Take Photo"          sub="Use camera to scan"       color="#5CB8B2" onPress={handleCamera}  />
-              <UploadRow icon="images"        label="Upload from Gallery" sub="Choose from your photos"  color={C.accent} onPress={handleGallery} />
-              <UploadRow icon="document-text" label="Choose File"         sub="Select a PDF or document" color="#F4A46A" onPress={handleFile}    />
+              <UploadRow icon="camera"        label="Take Photo"          sub="Scan with camera · AI reads it"  color="#5CB8B2" onPress={handleCamera}  />
+              <UploadRow icon="images"        label="Upload from Gallery" sub="Choose from your photos"          color={C.accent} onPress={handleGallery} />
+              <UploadRow icon="document-text" label="Choose File"         sub="Select a PDF or document"         color="#F4A46A" onPress={handleFile}    />
             </View>
-            <Pressable style={s.cancelBtn} onPress={() => setIsUploadModalVisible(false)}>
+            <Pressable style={s.cancelBtn} onPress={() => setIsUploadModal(false)}>
               <Text style={s.cancelText}>Cancel</Text>
             </Pressable>
           </Animated.View>
         </Pressable>
       </Modal>
 
-      {/* ── Category Modal ── */}
+      {/* ── Not a Report Modal ── */}
       <Modal
-        visible={isCategoryModal}
+        visible={notReportModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNotReportModal(false)}
+      >
+        <Pressable style={s.overlay} onPress={() => setNotReportModal(false)}>
+          <Animated.View entering={FadeInUp} style={s.sheet}>
+            <View style={s.handle} />
+            <View style={s.notReportIcon}>
+              <Ionicons name="alert-circle-outline" size={48} color="#F4A46A" />
+            </View>
+            <Text style={s.sheetTitle}>Not a Medical Document</Text>
+            <Text style={s.sheetSub}>
+              This doesn't look like a medical report.{"\n"}
+              Please upload a prescription, blood test result, X-ray, or medical report.
+            </Text>
+            <View style={{ gap: 12, marginTop: 8 }}>
+              <Pressable
+                style={[s.cancelBtn, { backgroundColor: C.accent }]}
+                onPress={() => { setNotReportModal(false); setIsUploadModal(true); }}
+              >
+                <Text style={[s.cancelText, { color: C.white }]}>Try Again</Text>
+              </Pressable>
+              <Pressable style={s.cancelBtn} onPress={() => setNotReportModal(false)}>
+                <Text style={s.cancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Animated.View>
+        </Pressable>
+      </Modal>
+
+      {/* ── View Record Modal (images) ── */}
+      <Modal
+        visible={!!viewingRecord}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewingRecord(null)}
+      >
+        <View style={s.viewOverlay}>
+          <Pressable style={s.viewClose} onPress={() => setViewingRecord(null)}>
+            <Ionicons name="close" size={28} color={C.white} />
+          </Pressable>
+          {viewingRecord?.uri && (
+            <Image
+              source={{ uri: viewingRecord.uri }}
+              style={s.viewImage}
+              resizeMode="contain"
+            />
+          )}
+          <Text style={s.viewCaption}>{viewingRecord?.title}</Text>
+          <Text style={s.viewDate}>{viewingRecord?.date}</Text>
+        </View>
+      </Modal>
+
+      {/* ── Share Record Picker Modal ── */}
+      <Modal
+        visible={sharePickerModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setIsCategoryModal(false)}
+        onRequestClose={() => { setSharePickerModal(false); setSharingDoctor(null); }}
       >
         <View style={s.overlay}>
           <Animated.View entering={FadeInUp} style={s.sheet}>
             <View style={s.handle} />
-            <Text style={s.sheetTitle}>Select Report Type</Text>
-            <Text style={s.sheetSub}>Which category does this belong to?</Text>
-            <View style={s.sheetOptions}>
-              {FILTERS.filter(f => f !== "All").map(cat => (
-                <Pressable key={cat} style={s.catRow} onPress={() => saveRecord(cat)}>
-                  <View style={[s.catIcon, { backgroundColor: badgeBgForCategory(cat) }]}>
-                    <Ionicons name={iconForCategory(cat) as any} size={20} color={badgeColorForCategory(cat)} />
-                  </View>
-                  <Text style={s.catLabel}>{cat}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={C.muted} />
-                </Pressable>
-              ))}
-            </View>
-            <Pressable style={s.cancelBtn} onPress={() => setIsCategoryModal(false)}>
-              <Text style={s.cancelText}>Back</Text>
+            <Text style={s.sheetTitle}>Share with {sharingDoctor?.name}</Text>
+            <Text style={s.sheetSub}>Choose which record to send</Text>
+            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 10 }}>
+                {records.map(r => (
+                  <Pressable key={r.id} style={s.shareRecRow} onPress={() => handleShareRecord(r)}>
+                    <View style={[s.shareRecIcon, { backgroundColor: badgeBgForCategory(r.category) }]}>
+                      <Ionicons name={(r.icon_name || "document-text-outline") as any} size={20} color={badgeColorForCategory(r.category)} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.shareRecTitle} numberOfLines={1}>{r.title}</Text>
+                      <Text style={s.shareRecDate}>{r.date}</Text>
+                    </View>
+                    <Ionicons name="share-outline" size={18} color={C.accent} />
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+            <Pressable style={[s.cancelBtn, { marginTop: 12 }]} onPress={() => { setSharePickerModal(false); setSharingDoctor(null); }}>
+              <Text style={s.cancelText}>Cancel</Text>
             </Pressable>
           </Animated.View>
         </View>
+      </Modal>
+
+      {/* ── Add Doctor Modal ── */}
+      <Modal
+        visible={addDoctorModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddDoctorModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          {/* dim backdrop — only above the sheet so it never blocks sheet touches */}
+          <Pressable
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.40)' }}
+            onPress={() => setAddDoctorModal(false)}
+          />
+          <View style={s.sheet}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>Add Doctor</Text>
+            <Text style={s.sheetSub}>Doctor will appear in My Doctors for quick sharing</Text>
+            <View style={{ gap: 12, marginBottom: 8 }}>
+              <TextInput
+                style={s.doctorInput}
+                placeholder="Doctor Name  e.g. Dr. Mehta"
+                placeholderTextColor={C.muted}
+                value={newDoctorName}
+                onChangeText={setNewDoctorName}
+                returnKeyType="next"
+              />
+              <View style={s.doctorPhoneRow}>
+                <Pressable
+                  style={s.doctorDialBtn}
+                  onPress={() => setCountryPickerOpen(true)}
+                  hitSlop={8}
+                >
+                  <Text style={s.doctorDialFlag}>{doctorCountry.flag}</Text>
+                  <Text style={s.doctorDialCode}>{doctorCountry.dial}</Text>
+                  <Ionicons name="chevron-down" size={13} color={C.muted} />
+                </Pressable>
+                <View style={s.doctorPhoneDivider} />
+                <TextInput
+                  style={s.doctorPhoneInput}
+                  placeholder="Phone number (optional)"
+                  placeholderTextColor={C.muted}
+                  keyboardType="phone-pad"
+                  value={newDoctorPhone}
+                  onChangeText={setNewDoctorPhone}
+                  returnKeyType="done"
+                />
+              </View>
+            </View>
+            <Pressable
+              style={[s.cancelBtn, { backgroundColor: newDoctorName.trim() ? C.navy : '#D0D8E4' }]}
+              onPress={handleAddDoctor}
+              disabled={!newDoctorName.trim() || savingDoctor}
+            >
+              <Text style={[s.cancelText, { color: newDoctorName.trim() ? C.white : C.muted }]}>
+                {savingDoctor ? 'Saving…' : 'Add Doctor'}
+              </Text>
+            </Pressable>
+            <Pressable style={[s.cancelBtn, { marginTop: 8 }]} onPress={() => setAddDoctorModal(false)}>
+              <Text style={s.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+
+          <CountryPickerModal
+            visible={countryPickerOpen}
+            onSelect={(c) => { setDoctorCountry(c); setCountryPickerOpen(false); }}
+            onClose={() => setCountryPickerOpen(false)}
+            showDial
+          />
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Edit Record Modal ── */}
+      <Modal
+        visible={!!editingRecord}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditingRecord(null)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.40)' }}
+            onPress={() => setEditingRecord(null)}
+          />
+          <View style={s.sheet}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>Edit Record</Text>
+            <Text style={s.sheetSub}>Update the title or category</Text>
+
+            <TextInput
+              style={[s.doctorInput, { marginBottom: 12 }]}
+              placeholder="Record title"
+              placeholderTextColor={C.muted}
+              value={editTitle}
+              onChangeText={setEditTitle}
+              returnKeyType="done"
+            />
+
+            <Text style={{ fontSize: 13, fontWeight: '700', color: C.muted, marginBottom: 8 }}>Category</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+              {(CATEGORIES as readonly Category[]).map((cat) => (
+                <Pressable
+                  key={cat}
+                  onPress={() => setEditCategory(cat)}
+                  style={[
+                    s.chip,
+                    { flex: 1, justifyContent: 'center' },
+                    editCategory === cat && s.chipActive,
+                  ]}
+                >
+                  <Text style={[s.chipText, { textAlign: 'center' }, editCategory === cat && s.chipTextActive]}>
+                    {cat}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              style={[s.cancelBtn, { backgroundColor: editTitle.trim() ? C.navy : '#D0D8E4', marginBottom: 8 }]}
+              onPress={handleEditSave}
+              disabled={!editTitle.trim() || savingEdit}
+            >
+              <Text style={[s.cancelText, { color: editTitle.trim() ? C.white : C.muted }]}>
+                {savingEdit ? 'Saving…' : 'Save Changes'}
+              </Text>
+            </Pressable>
+            <Pressable style={s.cancelBtn} onPress={() => setEditingRecord(null)}>
+              <Text style={s.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -443,11 +992,11 @@ function Stat({ n, label }: { n: number; label: string }) {
   );
 }
 
-function UploadRow({ icon, label, sub, color, onPress }: any) {
+function UploadRow({ icon, label, sub, color, onPress }: { icon: string; label: string; sub: string; color: string; onPress: () => void }) {
   return (
     <Pressable style={s.uploadRow} onPress={onPress}>
       <View style={[s.uploadIcon, { backgroundColor: color + "20" }]}>
-        <Ionicons name={icon} size={22} color={color} />
+        <Ionicons name={icon as any} size={22} color={color} />
       </View>
       <View style={{ flex: 1, marginLeft: 14 }}>
         <Text style={s.uploadLabel}>{label}</Text>
@@ -462,320 +1011,158 @@ function UploadRow({ icon, label, sub, color, onPress }: any) {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
 
-  /* Header */
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingBottom: 18,
-    gap: 14,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 18, paddingBottom: 18, gap: 14,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: C.white,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: C.white, justifyContent: "center", alignItems: "center",
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: C.white,
-  },
+  headerTitle: { fontSize: 20, fontWeight: "800", color: C.white },
+  headerSub:   { fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.75)", marginTop: 2 },
 
   scroll: { paddingTop: 16 },
 
-  /* Summary Card */
   card: {
-    backgroundColor: C.white,
-    marginHorizontal: 16,
-    marginBottom: 14,
-    borderRadius: 22,
-    padding: 20,
-    boxShadow: "0px 2px 12px rgba(0,0,0,0.07)",
-    elevation: 3,
+    backgroundColor: C.white, marginHorizontal: 16, marginBottom: 14,
+    borderRadius: 22, padding: 20,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 12, elevation: 3,
   },
-  cardLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: C.muted,
-  },
-  cardBig: {
-    fontSize: 30,
-    fontWeight: "900",
-    color: C.navyDark,
-    marginTop: 4,
-  },
-  cardSub: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: C.muted,
-    marginTop: 4,
-  },
-  statsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 20,
-  },
-  statItem: { flex: 1, alignItems: "center" },
-  statN: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: C.accent,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: C.muted,
-    marginTop: 3,
-    textAlign: "center",
-  },
-  divider: {
-    width: 1,
-    height: 36,
-    backgroundColor: "#D8E4EC",
-  },
+  cardLabel: { fontSize: 13, fontWeight: "600", color: C.muted },
+  cardBig:   { fontSize: 30, fontWeight: "900", color: C.navyDark, marginTop: 4 },
+  cardSub:   { fontSize: 12, fontWeight: "500", color: C.muted, marginTop: 4 },
+  statsRow:  { flexDirection: "row", alignItems: "center", marginTop: 20 },
+  statItem:  { flex: 1, alignItems: "center" },
+  statN:     { fontSize: 22, fontWeight: "900", color: C.accent },
+  statLabel: { fontSize: 10, fontWeight: "600", color: C.muted, marginTop: 3, textAlign: "center" },
+  divider:   { width: 1, height: 36, backgroundColor: "#D8E4EC" },
 
-  /* Scan Card */
   scanCard: {
-    backgroundColor: C.white,
-    marginHorizontal: 16,
-    marginBottom: 18,
-    borderRadius: 22,
-    padding: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    boxShadow: "0px 2px 12px rgba(0,0,0,0.07)",
-    elevation: 3,
+    backgroundColor: C.white, marginHorizontal: 16, marginBottom: 18,
+    borderRadius: 22, padding: 20,
+    flexDirection: "row", alignItems: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 12, elevation: 3,
   },
-  scanLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: C.muted,
-  },
-  scanTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: C.accent,
-    marginTop: 4,
-  },
-  scanSub: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: C.muted,
-    marginTop: 4,
-  },
-  scanImg: {
-    width: 88,
-    height: 88,
-  },
+  scanLabel: { fontSize: 13, fontWeight: "600", color: C.muted },
+  scanTitle: { fontSize: 24, fontWeight: "900", color: C.accent, marginTop: 4 },
+  scanSub:   { fontSize: 12, fontWeight: "500", color: C.muted, marginTop: 4 },
+  scanImg:   { width: 88, height: 88 },
 
-  /* Filter Chips */
   filterWrap: { marginBottom: 20 },
   filterRow:  { paddingHorizontal: 16, gap: 10 },
   chip: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 30,
-    backgroundColor: C.white,
-    borderWidth: 1.5,
-    borderColor: "#D4DCE8",
+    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 30,
+    backgroundColor: C.white, borderWidth: 1.5, borderColor: "#D4DCE8",
   },
-  chipActive:     { backgroundColor: "#1A2E6A", borderColor: "#1A2E6A" },
+  chipActive:     { backgroundColor: C.navy, borderColor: C.navy },
   chipText:       { fontSize: 14, fontWeight: "700", color: C.muted },
   chipTextActive: { color: C.white },
 
-  /* Section Header */
   secHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    marginBottom: 12,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 18, marginBottom: 12, marginTop: 4,
   },
-  secTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#111D44",
-  },
-  viewAll: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: C.accent,
-  },
+  secTitle: { fontSize: 18, fontWeight: "900", color: C.navyDark },
+  secSub:   { fontSize: 13, fontWeight: "600", color: C.accent },
 
-  /* Record Cards */
   list: { paddingHorizontal: 16, gap: 12, marginBottom: 24 },
   recCard: {
-    backgroundColor: C.white,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
-    boxShadow: "0px 1px 8px rgba(0,0,0,0.06)",
-    elevation: 2,
+    backgroundColor: C.white, borderRadius: 20,
+    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 14,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
+  recRow:     { flexDirection: "row", alignItems: "center" },
+  iconCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: "center", alignItems: "center", marginRight: 12 },
+  recMid:     { flex: 1 },
+  recTitle:   { fontSize: 15, fontWeight: "800", color: C.navyDark },
+  recDate:    { fontSize: 12, fontWeight: "500", color: C.muted, marginTop: 2 },
+  recActions: { flexDirection: "row", alignItems: "center" },
 
-  /* Row 1 inside card */
-  recRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: C.iconBg,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  recMid:   { flex: 1 },
-  recTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#111D44",
-  },
-  recDate: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: C.muted,
-    marginTop: 2,
-  },
+  actionIconBtn: { padding: 6, marginLeft: 4 },
 
-  viewBtn: {
-    backgroundColor: C.navy,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 24,
-  },
-  viewBtnText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: C.white,
-  },
+  shareBtn:     { backgroundColor: C.navy, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 24, flexDirection: "row", alignItems: "center", gap: 5 },
+  shareBtnText: { fontSize: 13, fontWeight: "800", color: C.white },
 
-  shareBtn: {
-    backgroundColor: C.navy,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 24,
-  },
-  shareBtnText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: C.white,
-  },
-
-  /* Row 2 inside card */
   recBottom: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 12,
-    paddingLeft: 60,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginTop: 12, paddingLeft: 60,
   },
-  badge: {
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  recSize: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: C.muted,
-  },
+  badge:     { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20 },
+  badgeText: { fontSize: 12, fontWeight: "700" },
+  recSize:   { fontSize: 12, fontWeight: "600", color: C.muted },
 
-  emptyBox:  { padding: 40, alignItems: "center" },
-  emptyText: { fontSize: 14, color: C.muted, textAlign: "center" },
+  emptyBox:     { padding: 40, alignItems: "center", gap: 8 },
+  emptyText:    { fontSize: 16, fontWeight: "800", color: C.navyDark },
+  emptySubText: { fontSize: 13, color: C.muted, textAlign: "center" },
 
-  /* Modal */
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.40)",
-    justifyContent: "flex-end",
+  aiOverlay: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center", alignItems: "center",
   },
+  aiCard: {
+    backgroundColor: C.white, borderRadius: 24, padding: 32,
+    alignItems: "center", gap: 12, marginHorizontal: 40,
+  },
+  aiLoadingText: { fontSize: 17, fontWeight: "800", color: C.navyDark, textAlign: "center" },
+  aiLoadingSub:  { fontSize: 13, fontWeight: "500", color: C.muted, textAlign: "center" },
+
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.40)", justifyContent: "flex-end" },
   sheet: {
-    backgroundColor: C.white,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 22,
-    paddingTop: 14,
+    backgroundColor: C.white, borderTopLeftRadius: 30, borderTopRightRadius: 30,
+    paddingHorizontal: 22, paddingTop: 14,
     paddingBottom: Platform.OS === "ios" ? 44 : 28,
   },
-  handle: {
-    width: 38,
-    height: 5,
-    backgroundColor: "#D8E4EC",
-    borderRadius: 3,
-    alignSelf: "center",
-    marginBottom: 18,
-  },
-  sheetTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#111D44",
-    textAlign: "center",
-  },
-  sheetSub: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: C.muted,
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: 20,
-  },
+  handle:    { width: 38, height: 5, backgroundColor: "#D8E4EC", borderRadius: 3, alignSelf: "center", marginBottom: 18 },
+  sheetTitle:{ fontSize: 20, fontWeight: "900", color: C.navyDark, textAlign: "center" },
+  sheetSub:  { fontSize: 13, fontWeight: "500", color: C.muted, textAlign: "center", marginTop: 4, marginBottom: 20 },
   sheetOptions: { gap: 12, marginBottom: 18 },
 
-  uploadRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: C.bg,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  uploadIcon:  {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  uploadLabel: { fontSize: 15, fontWeight: "800", color: "#111D44" },
+  uploadRow:   { flexDirection: "row", alignItems: "center", backgroundColor: C.bg, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border },
+  uploadIcon:  { width: 44, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  uploadLabel: { fontSize: 15, fontWeight: "800", color: C.navyDark },
   uploadSub:   { fontSize: 12, fontWeight: "500", color: C.muted, marginTop: 2 },
 
-  catRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: C.bg,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: C.border,
-    gap: 14,
-  },
-  catIcon:  {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  catLabel: { flex: 1, fontSize: 15, fontWeight: "800", color: "#111D44" },
-
-  cancelBtn: {
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: C.bg,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  cancelBtn:  { height: 52, borderRadius: 16, backgroundColor: C.bg, justifyContent: "center", alignItems: "center" },
   cancelText: { fontSize: 15, fontWeight: "800", color: C.muted },
+
+  notReportIcon: { alignItems: "center", marginBottom: 4 },
+
+  shareRecRow:   { flexDirection: "row", alignItems: "center", backgroundColor: C.bg, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border, gap: 14 },
+  shareRecIcon:  { width: 44, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  shareRecTitle: { fontSize: 15, fontWeight: "800", color: C.navyDark },
+  shareRecDate:  { fontSize: 11, color: C.muted, marginTop: 2 },
+
+  viewOverlay: { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" },
+  viewClose: {
+    position: "absolute", top: 56, right: 20,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center", alignItems: "center", zIndex: 10,
+  },
+  viewImage:   { width: "100%", height: "75%" },
+  viewCaption: { marginTop: 16, fontSize: 16, fontWeight: "800", color: C.white, textAlign: "center", paddingHorizontal: 20 },
+  viewDate:    { marginTop: 4, fontSize: 13, color: "#aaa", textAlign: "center" },
+
+  doctorInput: {
+    backgroundColor: C.bg, borderRadius: 14, height: 50,
+    paddingHorizontal: 16, fontSize: 15, fontWeight: "600" as const, color: C.navyDark,
+    borderWidth: 1, borderColor: C.border,
+  },
+  doctorPhoneRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: C.bg, borderRadius: 14, height: 50,
+    borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 12,
+  },
+  doctorDialBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4, paddingRight: 8,
+  },
+  doctorDialFlag: { fontSize: 20 },
+  doctorDialCode: { fontSize: 13, fontWeight: "700" as const, color: C.navyDark },
+  doctorPhoneDivider: { width: 1, height: 26, backgroundColor: C.border, marginRight: 10 },
+  doctorPhoneInput: {
+    flex: 1, fontSize: 15, fontWeight: "600" as const, color: C.navyDark,
+  },
 });

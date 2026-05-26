@@ -1,11 +1,15 @@
 const { Buffer } = require('buffer');
 
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_MODEL_TEXT   = 'gemini-2.0-flash';   // fast text + vision
+const GEMINI_MODEL_VISION = 'gemini-2.0-flash';   // supports image input
 
-function getOpenAiKey() {
-  return process.env.OPENAI_API_KEY;
-}
+// ── Key helpers ───────────────────────────────────────────────────────────────
+function getOpenAiKey()  { return process.env.OPENAI_API_KEY; }
+function getGeminiKey()  { return process.env.GEMINI_API_KEY; }
 
+// ── OpenAI fetch helper (Whisper + TTS + fallback chat/vision) ────────────────
 async function openAiFetch(path, init) {
   const apiKey = getOpenAiKey();
   if (!apiKey) {
@@ -13,86 +17,122 @@ async function openAiFetch(path, init) {
     err.statusCode = 500;
     throw err;
   }
+  return fetch(`${OPENAI_BASE_URL}${path}`, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(25_000),
+    headers: { ...(init?.headers || {}), Authorization: `Bearer ${apiKey}` },
+  });
+}
 
-  if (typeof fetch !== 'function') {
-    const err = new Error('global fetch is not available in this Node runtime');
+// ── Gemini text helper ────────────────────────────────────────────────────────
+// systemPrompt is folded into the first user turn (Gemini supports systemInstruction
+// in v1beta but folding is simpler and equally effective for these tasks).
+async function geminiFetch(model, body, timeoutMs = 25_000) {
+  const apiKey = getGeminiKey();
+  if (!apiKey) {
+    const err = new Error('GEMINI_API_KEY is not configured. Add it to server/.env');
     err.statusCode = 500;
     throw err;
   }
-
-  const response = await fetch(`${OPENAI_BASE_URL}${path}`, {
-    ...init,
-    signal: init?.signal ?? AbortSignal.timeout(25_000),
-    headers: {
-      ...(init?.headers || {}),
-      Authorization: `Bearer ${apiKey}`,
-    },
+  return fetch(`${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
-
-  return response;
 }
 
+// Extract text from a Gemini response JSON
+function geminiText(json) {
+  return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+}
+
+// ── Sathi AI system prompt ────────────────────────────────────────────────────
+const SATHI_SYSTEM = `You are Sathi (meaning Companion), a warm, intelligent AI health assistant for elderly users built into the TinyBit app.
+Your role is to help users manage their health, remember medicines, stay connected with family, and feel supported.
+
+CORE GUIDELINES:
+- Keep responses concise, warm, and reassuring — never clinical or overwhelming.
+- Use a calm, caring tone suitable for elderly users.
+- If asked about medicines or health data, reference the USER CONTEXT provided.
+- Never diagnose or replace professional medical advice — always suggest consulting a doctor for serious concerns.
+- LANGUAGE RULE (highest priority): Detect the script/language of the user's most recent message and respond in that exact language.
+  Hindi → Devanagari | Tamil → Tamil script | Bengali → Bengali script | Gujarati → Gujarati script | Marathi → Devanagari | English → English
+  Never respond in a different language than the one used, regardless of any other instruction.`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 1. CHAT — Gemini (primary) → OpenAI GPT-4o-mini (fallback)
+// ═══════════════════════════════════════════════════════════════════════════════
 const chat = async (req, res) => {
   try {
     const { messages, context } = req.body || {};
-
     if (!Array.isArray(messages)) {
       return res.status(400).json({ success: false, message: '`messages` must be an array' });
     }
 
-    const response = await openAiFetch('/chat/completions', {
+    const systemPrompt = `${SATHI_SYSTEM}\n\nUSER CONTEXT:\n${context ?? 'No context provided.'}`;
+
+    // ── Try Gemini first ──────────────────────────────────────────────────────
+    try {
+      // Build multi-turn contents; prepend system prompt to first user message
+      const contents = messages.map((m, i) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: i === 0 ? `${systemPrompt}\n\n${m.content}` : String(m.content ?? '') }],
+      }));
+
+      const geminiResp = await geminiFetch(GEMINI_MODEL_TEXT, {
+        contents,
+        generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+      });
+
+      if (geminiResp.ok) {
+        const json = await geminiResp.json();
+        const content = geminiText(json);
+        if (content) return res.json({ success: true, data: { content }, provider: 'gemini' });
+      } else {
+        const errBody = await geminiResp.text();
+        console.warn('[Sathi] Gemini error:', geminiResp.status, errBody);
+      }
+    } catch (geminiErr) {
+      console.warn('[Sathi] Gemini failed, falling back to OpenAI:', geminiErr.message);
+    }
+
+    // ── Fallback: OpenAI GPT-4o-mini ─────────────────────────────────────────
+    const oaiResp = await openAiFetch('/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: `You are Sathi (meaning Companion), an advanced Jarvis-like AI for elders.
-You are warm, respectful, and highly intelligent.
-Your goal is to help the user manage their health, remember medicines, and stay connected with family.
-
-USER CONTEXT:
-${context ?? ''}
-
-INSTRUCTIONS:
-- Keep responses concise but very friendly.
-- Use a calm, reassuring tone.
-- If they ask about medicines or health, use the provided context.
-- Never give professional medical advice, remind them you are an AI assistant.
-- If a family message is mentioned in context, remind them to check it.`,
-          },
-          ...messages,
-        ],
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'system', content: systemPrompt }, ...messages],
         temperature: 0.7,
       }),
     });
 
-    if (!response.ok) {
-      const body = await response.text();
-      return res.status(502).json({ success: false, message: 'OpenAI error', detail: body });
+    if (!oaiResp.ok) {
+      const body = await oaiResp.text();
+      return res.status(502).json({ success: false, message: 'AI service error', detail: body });
     }
 
-    const json = await response.json();
-    const content = json?.choices?.[0]?.message?.content ?? '';
-
-    return res.json({ success: true, data: { content } });
+    const oaiJson = await oaiResp.json();
+    const content = oaiJson?.choices?.[0]?.message?.content ?? '';
+    return res.json({ success: true, data: { content }, provider: 'openai' });
   } catch (error) {
-    const status = error?.statusCode || 500;
-    return res.status(status).json({ success: false, message: error?.message || 'Server error' });
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 2. TRANSCRIBE — OpenAI Whisper (Gemini audio transcription not used here)
+// ═══════════════════════════════════════════════════════════════════════════════
 const transcribe = async (req, res) => {
   try {
     const { base64, filename, mimeType } = req.body || {};
-
     if (typeof base64 !== 'string' || base64.length < 10) {
       return res.status(400).json({ success: false, message: '`base64` audio is required' });
     }
 
-    const safeFilename = typeof filename === 'string' && filename.trim() ? filename.trim() : 'audio.m4a';
-    const safeMime = typeof mimeType === 'string' && mimeType.trim() ? mimeType.trim() : 'audio/m4a';
+    const safeFilename = filename?.trim() || 'audio.m4a';
+    const safeMime = mimeType?.trim() || 'audio/m4a';
 
     const bytes = Buffer.from(base64, 'base64');
     const form = new FormData();
@@ -107,21 +147,22 @@ const transcribe = async (req, res) => {
 
     if (!response.ok) {
       const body = await response.text();
-      return res.status(502).json({ success: false, message: 'OpenAI error', detail: body });
+      return res.status(502).json({ success: false, message: 'Transcription error', detail: body });
     }
 
     const json = await response.json();
     return res.json({ success: true, data: { text: json?.text ?? '' } });
   } catch (error) {
-    const status = error?.statusCode || 500;
-    return res.status(status).json({ success: false, message: error?.message || 'Server error' });
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 3. TTS — OpenAI TTS (Gemini doesn't support audio output)
+// ═══════════════════════════════════════════════════════════════════════════════
 const tts = async (req, res) => {
   try {
     const { text, voice } = req.body || {};
-
     if (typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ success: false, message: '`text` is required' });
     }
@@ -132,30 +173,376 @@ const tts = async (req, res) => {
       signal: AbortSignal.timeout(35_000),
       body: JSON.stringify({
         model: 'tts-1',
-        voice: typeof voice === 'string' && voice.trim() ? voice.trim() : 'nova',
+        voice: voice?.trim() || 'nova',
         input: text,
       }),
     });
 
     if (!response.ok) {
       const body = await response.text();
-      return res.status(502).json({ success: false, message: 'OpenAI error', detail: body });
+      return res.status(502).json({ success: false, message: 'TTS error', detail: body });
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
-    const base64 = buffer.toString('base64');
-
-    return res.json({
-      success: true,
-      data: {
-        base64,
-        mimeType: 'audio/mpeg',
-      },
-    });
+    return res.json({ success: true, data: { base64: buffer.toString('base64'), mimeType: 'audio/mpeg' } });
   } catch (error) {
-    const status = error?.statusCode || 500;
-    return res.status(status).json({ success: false, message: error?.message || 'Server error' });
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
   }
 };
 
-module.exports = { chat, transcribe, tts };
+// ═══════════════════════════════════════════════════════════════════════════════
+// 4. ANALYZE REPORT — Gemini Vision (primary) → OpenAI GPT-4o-mini (fallback)
+// ═══════════════════════════════════════════════════════════════════════════════
+const REPORT_PROMPT = `Classify this as a medical document. Respond ONLY with valid JSON, no markdown:
+{"isReport": true, "category": "Reports"}
+
+Use true for: doctor prescriptions, X-ray/MRI/CT, blood/lab tests, ECG, discharge summaries, medical certificates.
+Use false for: ID cards, resumes, school certificates, bank statements, personal photos, food photos.
+category must be one of: "Reports", "Prescriptions", "X-Rays", "Blood Tests", or null.
+When in doubt, use false.`;
+
+const analyzeReport = async (req, res) => {
+  try {
+    const { base64, mimeType } = req.body || {};
+    if (typeof base64 !== 'string' || base64.length < 100) {
+      return res.status(400).json({ success: false, message: '`base64` image is required' });
+    }
+
+    const safeMime = mimeType?.trim() || 'image/jpeg';
+    const isImage = safeMime.startsWith('image/');
+
+    // ── Try Gemini Vision for images ─────────────────────────────────────────
+    if (isImage) {
+      try {
+        const geminiResp = await geminiFetch(GEMINI_MODEL_VISION, {
+          contents: [{
+            parts: [
+              { inlineData: { mimeType: safeMime, data: base64 } },
+              { text: REPORT_PROMPT },
+            ],
+          }],
+          generationConfig: { maxOutputTokens: 100, temperature: 0 },
+        }, 20_000);
+
+        if (geminiResp.ok) {
+          const json = await geminiResp.json();
+          const content = geminiText(json).trim().replace(/```json|```/g, '').trim();
+          try {
+            const result = JSON.parse(content);
+            return res.json({ success: true, data: { isReport: !!result.isReport, category: result.category ?? null } });
+          } catch {
+            const isReport = /\"isReport\"\s*:\s*true/i.test(content);
+            return res.json({ success: true, data: { isReport, category: isReport ? 'Reports' : null } });
+          }
+        }
+      } catch (geminiErr) {
+        console.warn('[analyzeReport] Gemini failed, falling back to OpenAI:', geminiErr.message);
+      }
+    }
+
+    // ── Fallback: OpenAI GPT-4o-mini (supports PDFs too) ────────────────────
+    const oaiResp = await openAiFetch('/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(20_000),
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{
+          role: 'user',
+          content: [
+            safeMime === 'application/pdf'
+              ? { type: 'file', file: { filename: 'document.pdf', file_data: `data:application/pdf;base64,${base64}` } }
+              : { type: 'image_url', image_url: { url: `data:${safeMime};base64,${base64}`, detail: 'low' } },
+            { type: 'text', text: 'Classify as medical document. Respond ONLY JSON: {"isReport":true/false,"category":"Reports"|"Prescriptions"|"X-Rays"|"Blood Tests"|null}' },
+          ],
+        }],
+        max_tokens: 60,
+      }),
+    });
+
+    const oaiJson = await oaiResp.json();
+    const content = (oaiJson?.choices?.[0]?.message?.content ?? '').trim().replace(/```json|```/g, '').trim();
+    try {
+      const result = JSON.parse(content);
+      return res.json({ success: true, data: { isReport: !!result.isReport, category: result.category ?? null } });
+    } catch {
+      const isReport = /\"isReport\"\s*:\s*true/i.test(content);
+      return res.json({ success: true, data: { isReport, category: isReport ? 'Reports' : null } });
+    }
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 5. ANALYZE FOOD — Gemini Vision (primary) → OpenAI GPT-4o-mini (fallback)
+// ═══════════════════════════════════════════════════════════════════════════════
+const FOOD_PROMPT = `You are a certified nutrition expert AI. Analyze this food photo and return detailed nutritional information.
+Respond with ONLY valid JSON (no markdown, no extra text):
+{
+  "detected": true,
+  "foodItems": ["item1", "item2"],
+  "totalCalories": 350,
+  "protein": 12,
+  "carbohydrates": 45,
+  "fat": 8,
+  "fiber": 3,
+  "sugar": 10,
+  "sodium": 400,
+  "vitamins": ["Vitamin A", "Vitamin C", "Calcium"],
+  "healthScore": 7,
+  "healthRating": "Good",
+  "portionSize": "medium",
+  "servingInfo": "1 plate (~300g)",
+  "suggestions": ["Consider adding more protein", "Good source of fiber"],
+  "dietaryTags": ["vegetarian"],
+  "glycemicIndex": "medium"
+}
+If no food is detected in the image, respond with {"detected": false} only.
+All numeric values must be numbers (not strings). healthRating must be: "Excellent", "Good", "Moderate", or "Poor".`;
+
+const analyzeFood = async (req, res) => {
+  try {
+    const { base64, mimeType } = req.body || {};
+    if (typeof base64 !== 'string' || base64.length < 100) {
+      return res.status(400).json({ success: false, message: '`base64` image is required' });
+    }
+
+    const safeMime = mimeType?.trim() || 'image/jpeg';
+
+    // ── Try Gemini Vision first ───────────────────────────────────────────────
+    try {
+      const geminiResp = await geminiFetch(GEMINI_MODEL_VISION, {
+        contents: [{
+          parts: [
+            { inlineData: { mimeType: safeMime, data: base64 } },
+            { text: FOOD_PROMPT },
+          ],
+        }],
+        generationConfig: { maxOutputTokens: 800, temperature: 0.2 },
+      }, 35_000);
+
+      if (geminiResp.ok) {
+        const json = await geminiResp.json();
+        const content = geminiText(json).trim().replace(/```json|```/g, '').trim();
+        try {
+          const result = JSON.parse(content);
+          return res.json({ success: true, data: result, provider: 'gemini' });
+        } catch { /* fall through to OpenAI */ }
+      } else {
+        const errBody = await geminiResp.text();
+        console.warn('[analyzeFood] Gemini error:', geminiResp.status, errBody);
+      }
+    } catch (geminiErr) {
+      console.warn('[analyzeFood] Gemini failed, falling back to OpenAI:', geminiErr.message);
+    }
+
+    // ── Fallback: OpenAI GPT-4o-mini Vision ──────────────────────────────────
+    const oaiResp = await openAiFetch('/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(35_000),
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: `data:${safeMime};base64,${base64}`, detail: 'high' } },
+            { type: 'text', text: FOOD_PROMPT },
+          ],
+        }],
+        max_tokens: 800,
+      }),
+    });
+
+    if (!oaiResp.ok) {
+      const body = await oaiResp.text();
+      return res.status(502).json({ success: false, message: 'Food analysis failed. Both AI providers unavailable.', detail: body });
+    }
+
+    const oaiJson = await oaiResp.json();
+    const content = (oaiJson?.choices?.[0]?.message?.content ?? '').trim().replace(/```json|```/g, '').trim();
+    try {
+      const result = JSON.parse(content);
+      return res.json({ success: true, data: result, provider: 'openai' });
+    } catch {
+      return res.json({ success: false, message: 'Could not parse nutrition data. Please try with a clearer food photo.' });
+    }
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 6. SUGGEST CLOTHING — Gemini (primary) → OpenAI (fallback) → static defaults
+// ═══════════════════════════════════════════════════════════════════════════════
+const CLOTHING_DEFAULTS = {
+  summary: "Dress comfortably for today's weather.",
+  items: ['Comfortable clothing', 'Appropriate footwear', 'Carry water'],
+  healthTips: ['Stay hydrated', 'Rest if feeling tired'],
+  warning: null,
+  emoji: '🌤️',
+};
+
+const suggestClothing = async (req, res) => {
+  try {
+    const { temperature, feelsLike, condition, humidity, windSpeed, uvIndex } = req.body || {};
+
+    const prompt = `You are a caring health advisor for elderly users. Based on today's weather, suggest appropriate clothing and health precautions.
+
+Current Weather:
+- Temperature: ${temperature ?? 'unknown'}°C (Feels like: ${feelsLike ?? temperature ?? 'unknown'}°C)
+- Condition: ${condition ?? 'Clear'}
+- Humidity: ${humidity ?? 'unknown'}%
+- Wind Speed: ${windSpeed ?? 'unknown'} km/h
+- UV Index: ${uvIndex ?? 'unknown'}
+
+Respond with ONLY valid JSON (no markdown):
+{
+  "summary": "1-sentence clothing summary tailored for elderly users",
+  "items": ["item1", "item2", "item3", "item4"],
+  "healthTips": ["tip1", "tip2", "tip3"],
+  "warning": "important health warning for elderly if extreme weather, or null",
+  "emoji": "🌤️"
+}`;
+
+    // ── Try Gemini first ──────────────────────────────────────────────────────
+    try {
+      const geminiResp = await geminiFetch(GEMINI_MODEL_TEXT, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 500, temperature: 0.5 },
+      }, 15_000);
+
+      if (geminiResp.ok) {
+        const json = await geminiResp.json();
+        const content = geminiText(json).trim().replace(/```json|```/g, '').trim();
+        try {
+          const result = JSON.parse(content);
+          return res.json({ success: true, data: result, provider: 'gemini' });
+        } catch { /* fall through */ }
+      }
+    } catch (geminiErr) {
+      console.warn('[suggestClothing] Gemini failed, falling back to OpenAI:', geminiErr.message);
+    }
+
+    // ── Fallback: OpenAI GPT-4o-mini ─────────────────────────────────────────
+    try {
+      const oaiResp = await openAiFetch('/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(15_000),
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 500,
+        }),
+      });
+
+      if (oaiResp.ok) {
+        const oaiJson = await oaiResp.json();
+        const content = (oaiJson?.choices?.[0]?.message?.content ?? '').trim().replace(/```json|```/g, '').trim();
+        try {
+          const result = JSON.parse(content);
+          return res.json({ success: true, data: result, provider: 'openai' });
+        } catch { /* fall through to defaults */ }
+      }
+    } catch (oaiErr) {
+      console.warn('[suggestClothing] OpenAI also failed:', oaiErr.message);
+    }
+
+    // ── Static defaults ───────────────────────────────────────────────────────
+    return res.json({ success: true, data: CLOTHING_DEFAULTS });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 7. WELLNESS SUMMARY — Gemini (primary) → OpenAI (fallback) → static defaults
+// ═══════════════════════════════════════════════════════════════════════════════
+const WELLNESS_DEFAULTS = {
+  overallStatus: 'Fair',
+  headline: 'Keep tracking your health!',
+  summary: 'Regular health tracking helps you and your family stay informed about your wellbeing.',
+  highlights: ["You're taking steps to monitor your health"],
+  suggestions: ['Continue logging daily', 'Drink plenty of water', 'Get regular rest'],
+  alertLevel: 'normal',
+};
+
+const wellnessSummary = async (req, res) => {
+  try {
+    const { logs, profile } = req.body || {};
+
+    const logsText = Array.isArray(logs) && logs.length > 0
+      ? logs.map(l => `${l.type}: ${l.value} ${l.unit ?? ''} (${l.logged_at ?? 'recent'})`).join('\n')
+      : 'No recent logs available.';
+
+    const prompt = `You are a compassionate health wellness advisor for elderly users. Analyze these recent health logs and provide a gentle, encouraging summary.
+
+User Profile: ${profile?.fullName ?? 'Elder'}, Age: ${profile?.age ?? 'unknown'}
+Recent Health Logs:
+${logsText}
+
+Respond with ONLY valid JSON (no markdown):
+{
+  "overallStatus": "Good",
+  "headline": "short encouraging headline",
+  "summary": "2-3 sentences about their health trends",
+  "highlights": ["positive observation 1", "positive observation 2"],
+  "suggestions": ["actionable health tip 1", "actionable health tip 2", "actionable health tip 3"],
+  "alertLevel": "normal"
+}
+overallStatus must be: "Good", "Fair", or "Needs Attention". alertLevel must be: "normal", "caution", or "alert".`;
+
+    // ── Try Gemini first ──────────────────────────────────────────────────────
+    try {
+      const geminiResp = await geminiFetch(GEMINI_MODEL_TEXT, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 600, temperature: 0.5 },
+      }, 20_000);
+
+      if (geminiResp.ok) {
+        const json = await geminiResp.json();
+        const content = geminiText(json).trim().replace(/```json|```/g, '').trim();
+        try {
+          const result = JSON.parse(content);
+          return res.json({ success: true, data: result, provider: 'gemini' });
+        } catch { /* fall through */ }
+      }
+    } catch (geminiErr) {
+      console.warn('[wellnessSummary] Gemini failed, falling back to OpenAI:', geminiErr.message);
+    }
+
+    // ── Fallback: OpenAI GPT-4o-mini ─────────────────────────────────────────
+    try {
+      const oaiResp = await openAiFetch('/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(20_000),
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 600,
+        }),
+      });
+
+      if (oaiResp.ok) {
+        const oaiJson = await oaiResp.json();
+        const content = (oaiJson?.choices?.[0]?.message?.content ?? '').trim().replace(/```json|```/g, '').trim();
+        try {
+          const result = JSON.parse(content);
+          return res.json({ success: true, data: result, provider: 'openai' });
+        } catch { /* fall through to defaults */ }
+      }
+    } catch (oaiErr) {
+      console.warn('[wellnessSummary] OpenAI also failed:', oaiErr.message);
+    }
+
+    // ── Static defaults ───────────────────────────────────────────────────────
+    return res.json({ success: true, data: WELLNESS_DEFAULTS });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
+  }
+};
+
+module.exports = { chat, transcribe, tts, analyzeReport, analyzeFood, suggestClothing, wellnessSummary };

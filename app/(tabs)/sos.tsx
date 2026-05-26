@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   Pressable,
   StatusBar,
   Linking,
-  Switch,
+  Alert,
   Modal,
   TextInput,
   TouchableOpacity,
@@ -29,6 +29,11 @@ import Animated, {
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "../../context/AuthContext";
+import { useLanguage } from "../../context/LanguageContext";
+import { tr } from "../../constants/appTranslations";
+import { getCountryEmergency } from "../../constants/emergencyNumbers";
+import CountryPickerModal from "../../components/CountryPickerModal";
+import type { Country } from "../../constants/countries";
 
 
 const C = {
@@ -58,26 +63,47 @@ interface EmergencyContact {
 export default function SOSScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  useAuth();
+  const { profile } = useAuth();
+  const { colors: themeColors, language } = useLanguage();
+  const t = tr(language);
+
+  const countryEmergency = getCountryEmergency(profile?.countryCode || "");
+
+  const profileContact: EmergencyContact | null = profile?.emergencyPhone?.trim()
+    ? {
+        id: "profile",
+        name: profile.emergencyRelation?.trim() || "Emergency Contact",
+        role: profile.emergencyPhone.trim(),
+        initials: (profile.emergencyRelation?.trim() || "E")[0].toUpperCase(),
+        color: "#F0F4FF",
+        phone: profile.emergencyPhone.trim(),
+      }
+    : null;
+
+  const countryContact: EmergencyContact = {
+    id: "country",
+    name: countryEmergency.label,
+    role: `Default emergency · ${countryEmergency.number}`,
+    initials: "🏥",
+    color: "#FFF0EE",
+    phone: countryEmergency.number,
+  };
 
   const [isActivating, setIsActivating] = useState(false);
   const [isCalled, setIsCalled] = useState(false);
-  const [fallDetection, setFallDetection] = useState(true);
-
-  const [contacts, setContacts] = useState<EmergencyContact[]>([
-    { id: "1", name: "Drashti Patil", role: "Sister · Vadodara, Gujarat", initials: "D", color: "#F0F4FF", phone: "12345" },
-    { id: "2", name: "Drashti Patil", role: "Mother · Vadodara, Gujarat", initials: "D", color: "#F0F4FF", phone: "12345" },
-    { id: "3", name: "Drashti Patil", role: "Father · Vadodara, Gujarat", initials: "D", color: "#F0F4FF", phone: "12345" },
-  ]);
+  const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingContact, setEditingContact] = useState<EmergencyContact>({
     name: "", role: "", initials: "", color: "", phone: "",
   });
+  const [dialCode, setDialCode] = useState("+91");
+  const [showDialPicker, setShowDialPicker] = useState(false);
 
   const openAddModal = () => {
     setEditingIndex(null);
     setEditingContact({ name: "", role: "", initials: "", color: "#F0F4FF", phone: "" });
+    setDialCode("+91");
     setIsEditModalVisible(true);
   };
 
@@ -89,13 +115,21 @@ export default function SOSScreen() {
 
   const handleSaveContact = () => {
     if (!editingContact.name || !editingContact.phone) return;
+    const digits = editingContact.phone.trim().replace(/\D/g, '');
+    if (digits.length < 6) {
+      Alert.alert('Invalid Phone', 'Please enter a valid phone number (at least 6 digits).');
+      return;
+    }
     const initials = editingContact.name.substring(0, 1).toUpperCase();
+    const rawPhone = editingContact.phone.trim();
+    const fullPhone = rawPhone.startsWith('+') ? rawPhone : `${dialCode}${rawPhone}`;
+    const saved = { ...editingContact, phone: fullPhone, initials };
     if (editingIndex !== null) {
       const c = [...contacts];
-      c[editingIndex] = { ...editingContact, initials };
+      c[editingIndex] = saved;
       setContacts(c);
     } else {
-      setContacts([...contacts, { ...editingContact, initials, id: Math.random().toString() }]);
+      setContacts([...contacts, { ...saved, id: Math.random().toString() }]);
     }
     setIsEditModalVisible(false);
     setEditingIndex(null);
@@ -164,7 +198,7 @@ export default function SOSScreen() {
     return () => clearInterval(interval);
   }, [isActivating, isCalled]);
 
-  const handleCall = (number: string) => Linking.openURL(`tel:${number}`);
+  const handleCall = (number: string) => Linking.openURL(`tel:${number}`).catch(() => Alert.alert('Error', 'Could not place call'));
 
   return (
     // Root is the blue gradient so rounded-corner curves show blue
@@ -178,14 +212,14 @@ export default function SOSScreen() {
 
       {/* Header — plain View, inherits gradient from parent */}
       <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.backBtn} hitSlop={10}>
           <Ionicons name="arrow-back" size={20} color={C.white} />
         </Pressable>
-        <Text style={styles.headerTitle}>Emergency SOS</Text>
+        <Text style={styles.headerTitle}>{t.emergencySOS}</Text>
       </View>
 
       {/* White rounded sheet — covers everything below header */}
-      <View style={styles.scrollSheet}>
+      <View style={[styles.scrollSheet, { backgroundColor: themeColors.bg }]}>
         <ScrollView
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
@@ -194,7 +228,7 @@ export default function SOSScreen() {
           {/* SOS section — sits directly on white sheet, no card wrapper */}
           <View style={styles.sosSection}>
             <Text style={styles.holdText}>
-              {isCalled ? "EMERGENCY ALERT SENT" : "HOLD TO ACTIVATE"}
+              {isCalled ? t.emergencyAlertSent : t.holdToActivate}
             </Text>
 
             {/* Button + rings */}
@@ -227,7 +261,7 @@ export default function SOSScreen() {
                   ) : (
                     <>
                       <Text style={styles.sosLabel}>SOS</Text>
-                      <Text style={styles.sosHint}>Press for 3 second</Text>
+                      <Text style={styles.sosHint}>{t.pressFor3Sec}</Text>
                     </>
                   )}
                 </LinearGradient>
@@ -235,44 +269,84 @@ export default function SOSScreen() {
             </View>
 
             <Text style={styles.sosInfoText}>
-              {isCalled
-                ? "Your family and emergency services\nhave been notified."
-                : "This will call your family and\nambulance at the same time"}
+              {isCalled ? t.familyNotified : t.willCallBoth}
             </Text>
           </View>
 
           {/* Emergency Contacts Header */}
           <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Emergency Contacts</Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>{t.emergencyContacts}</Text>
           <TouchableOpacity onPress={openAddModal} style={styles.addContactBtn}>
             <Ionicons name="add-circle" size={13} color={C.green} style={{ marginRight: 5 }} />
-            <Text style={styles.addContactText}>Add Contact</Text>
+            <Text style={styles.addContactText}>{t.addContact}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Contacts Card */}
-        <View style={styles.contactsCard}>
+        <View style={[styles.contactsCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
           {/* Red ribbon pill */}
           <View style={styles.redPill}>
-            <Text style={styles.redPillText}>Who gets call first</Text>
+            <Text style={styles.redPillText}>{t.whoGetsCallFirst}</Text>
           </View>
 
+          {/* Profile emergency contact (from onboarding) */}
+          {profileContact ? (
+            <View style={[styles.contactRow, { paddingTop: 48 }, styles.contactDivider]}>
+              <View style={[styles.avatar, styles.avatarInitials]}>
+                <Text style={styles.avatarInitialText}>{profileContact.initials}</Text>
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={[styles.contactName, { color: themeColors.text }]}>{profileContact.name}</Text>
+                <Text style={[styles.contactRole, { color: themeColors.muted }]}>{profileContact.role}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => handleCall(profileContact.phone)}
+                style={styles.callIconBtn}
+              >
+                <Ionicons name="call" size={16} color={C.white} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={[styles.contactRow, { paddingTop: 48 }, styles.contactDivider]}>
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Ionicons name="person-outline" size={22} color={C.muted} />
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={[styles.contactName, { color: C.muted }]}>{t.noPersonalContact}</Text>
+                <Text style={[styles.contactRole, { color: themeColors.muted }]}>{t.addInProfile}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Country default emergency number */}
+          <View style={styles.contactRow}>
+            <View style={[styles.avatar, styles.avatarEmergency]}>
+              <Ionicons name="medical" size={22} color="#D03050" />
+            </View>
+            <View style={styles.contactInfo}>
+              <Text style={styles.contactName}>{countryContact.name}</Text>
+              <Text style={styles.contactRole}>{countryContact.role}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => handleCall(countryContact.phone)}
+              style={[styles.callIconBtn, { backgroundColor: "#D03050" }]}
+            >
+              <Ionicons name="call" size={16} color={C.white} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Additional user-added contacts */}
           {contacts.map((contact, index) => (
             <View
               key={contact.id ?? index}
-              style={[
-                styles.contactRow,
-                index === 0 && { paddingTop: 48 },
-                index < contacts.length - 1 && styles.contactDivider,
-              ]}
+              style={[styles.contactRow, styles.contactDivider]}
             >
-              <Image
-                source={{ uri: `https://api.dicebear.com/7.x/adventurer/png?seed=${encodeURIComponent(contact.name + index)}&backgroundColor=b6e3f4,c0aede` }}
-                style={styles.avatar}
-              />
+              <View style={[styles.avatar, styles.avatarInitials]}>
+                <Text style={styles.avatarInitialText}>{contact.initials}</Text>
+              </View>
               <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>{contact.name}</Text>
-                <Text style={styles.contactRole}>{contact.role}</Text>
+                <Text style={[styles.contactName, { color: themeColors.text }]}>{contact.name}</Text>
+                <Text style={[styles.contactRole, { color: themeColors.muted }]}>{contact.role}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => openEditModal(contact, index)}
@@ -292,24 +366,7 @@ export default function SOSScreen() {
 
         {/* Safety Features Header */}
         <View style={[styles.sectionRow, { marginTop: 28 }]}>
-          <Text style={styles.sectionTitle}>Safety Features</Text>
-        </View>
-
-        {/* Fall Detection Card */}
-        <View style={styles.featureCard}>
-          <View style={styles.featureRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.featureTitle}>Fall Detection</Text>
-              <Text style={styles.featureSub}>Auto-alerts family if a fall is detected</Text>
-            </View>
-            <Switch
-              value={fallDetection}
-              onValueChange={setFallDetection}
-              trackColor={{ false: "#D8E2EC", true: C.green }}
-              thumbColor={C.white}
-              ios_backgroundColor="#D8E2EC"
-            />
-          </View>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Safety Features</Text>
         </View>
 
         {/* Sharing with Family Card */}
@@ -353,7 +410,7 @@ export default function SOSScreen() {
           onPress={() => setIsEditModalVisible(false)}
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={{ width: "100%" }}
           >
             <TouchableOpacity
@@ -366,30 +423,54 @@ export default function SOSScreen() {
 
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {editingIndex !== null ? "Edit Contact" : "Add Contact"}
+                  {editingIndex !== null ? t.editContact : t.addContact}
                 </Text>
                 <TouchableOpacity onPress={() => setIsEditModalVisible(false)} style={styles.closeBtn}>
                   <Ionicons name="close" size={22} color={C.text} />
                 </TouchableOpacity>
               </View>
 
-              {[
-                { label: "Name", key: "name", placeholder: "Full name", keyboard: "default" },
-                { label: "Mobile Number", key: "phone", placeholder: "Phone number", keyboard: "phone-pad" },
-                { label: "Relation / Location", key: "role", placeholder: "e.g. Sister · Vadodara, Gujarat", keyboard: "default" },
-              ].map(({ label, key, placeholder, keyboard }) => (
-                <View style={styles.inputGroup} key={key}>
-                  <Text style={styles.inputLabel}>{label}</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>{t.nameLabel}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editingContact.name}
+                  onChangeText={(text) => setEditingContact({ ...editingContact, name: text })}
+                  placeholder={t.fullNamePlaceholder}
+                  placeholderTextColor="#B8C4CE"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>{t.mobileNumber}</Text>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity
+                    style={[styles.input, { width: 76, alignItems: "center", justifyContent: "center" }]}
+                    onPress={() => setShowDialPicker(true)}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: C.text }}>{dialCode}</Text>
+                  </TouchableOpacity>
                   <TextInput
-                    style={styles.input}
-                    value={(editingContact as any)[key]}
-                    onChangeText={(text) => setEditingContact({ ...editingContact, [key]: text })}
-                    placeholder={placeholder}
+                    style={[styles.input, { flex: 1 }]}
+                    value={editingContact.phone}
+                    onChangeText={(text) => setEditingContact({ ...editingContact, phone: text })}
+                    placeholder={t.phonePlaceholder}
                     placeholderTextColor="#B8C4CE"
-                    keyboardType={keyboard as any}
+                    keyboardType="phone-pad"
                   />
                 </View>
-              ))}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>{t.relationLocation}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editingContact.role}
+                  onChangeText={(text) => setEditingContact({ ...editingContact, role: text })}
+                  placeholder={t.rolePlaceholder}
+                  placeholderTextColor="#B8C4CE"
+                />
+              </View>
 
               <View style={styles.modalFooter}>
                 {editingIndex !== null && (
@@ -402,7 +483,7 @@ export default function SOSScreen() {
                   onPress={handleSaveContact}
                 >
                   <Text style={styles.saveBtnText}>
-                    {editingIndex !== null ? "Update" : "Add"}
+                    {editingIndex !== null ? t.update : t.add}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -410,6 +491,13 @@ export default function SOSScreen() {
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
+
+      <CountryPickerModal
+        visible={showDialPicker}
+        showDial
+        onSelect={(c: Country) => { setDialCode(c.dial); setShowDialPicker(false); }}
+        onClose={() => setShowDialPicker(false)}
+      />
     </LinearGradient>
   );
 }
@@ -624,6 +712,26 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     marginRight: 12,
     backgroundColor: "#E8F1FB",
+  },
+  avatarPlaceholder: {
+    backgroundColor: "#F0F3F8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: {
+    backgroundColor: "#E8F1FB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitialText: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#4A9BC8",
+  },
+  avatarEmergency: {
+    backgroundColor: "#FFF0EE",
+    alignItems: "center",
+    justifyContent: "center",
   },
   contactInfo: { flex: 1 },
   contactName: {

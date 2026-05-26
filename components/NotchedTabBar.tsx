@@ -55,17 +55,15 @@ function TabIcon({ route, color }: { route: string; color: string }) {
 }
 
 const GUARDIAN_TABS = [
-  { icon: 'home-outline',          iconActive: 'home',           label: 'Home',     route: '/(tabs)'          },
-  { icon: 'location-outline',      iconActive: 'location',       label: 'Location', route: '/notifications'   },
-  { icon: 'notifications-outline', iconActive: 'notifications',  label: 'Alerts',   route: '/notifications'   },
-  { icon: 'document-text-outline', iconActive: 'document-text',  label: 'Reports',  route: '/(tabs)/health-vault' },
-  { icon: 'person-outline',        iconActive: 'person',         label: 'Profile',  route: '/(tabs)/profile'  },
+  { icon: 'home-outline',          iconActive: 'home',           label: 'Home',     name: 'index' },
+  { icon: 'location-outline',      iconActive: 'location',       label: 'Location', name: 'location' },
+  { icon: 'notifications-outline', iconActive: 'notifications',  label: 'Alerts',   name: 'alerts' },
+  { icon: 'document-text-outline', iconActive: 'document-text',  label: 'Reports',  name: 'reports' },
+  { icon: 'person-outline',        iconActive: 'person',         label: 'Profile',  name: 'profile' },
 ] as const;
 
-function GuardianTabBar({ nightMode }: { nightMode: boolean }) {
+function GuardianTabBar({ nightMode, state, navigation }: { nightMode: boolean; state: BottomTabBarProps['state']; navigation: BottomTabBarProps['navigation'] }) {
   const insets   = useSafeAreaInsets();
-  const router   = useRouter();
-  const pathname = usePathname();
 
   const tabBg       = nightMode ? '#161B22' : '#FFFFFF';
   const activeClr   = '#2C3E8C';
@@ -74,20 +72,33 @@ function GuardianTabBar({ nightMode }: { nightMode: boolean }) {
   return (
     <View style={[gt.bar, { backgroundColor: tabBg, paddingBottom: insets.bottom + 4 }]}>
       {GUARDIAN_TABS.map((tab) => {
-        const isActive = pathname === tab.route || (tab.route === '/(tabs)' && pathname === '/');
-        const color    = isActive ? activeClr : inactiveClr;
+        const isFocused = state.index === state.routes.findIndex(r => r.name === tab.name);
+        const color     = isFocused ? activeClr : inactiveClr;
+        
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: state.routes.find(r => r.name === tab.name)?.key,
+            canPreventDefault: true,
+          });
+
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(tab.name as never);
+          }
+        };
+
         return (
           <Pressable
             key={tab.label}
             style={gt.item}
-            onPress={() => router.push(tab.route as any)}
+            onPress={onPress}
           >
             <Ionicons
-              name={(isActive ? tab.iconActive : tab.icon) as any}
+              name={(isFocused ? tab.iconActive : tab.icon) as any}
               size={22}
               color={color}
             />
-            <Text style={[gt.label, { color }, isActive && gt.labelActive]}>
+            <Text style={[gt.label, { color }, isFocused && gt.labelActive]}>
               {tab.label}
             </Text>
           </Pressable>
@@ -126,7 +137,9 @@ export function NotchedTabBar({ state, descriptors, navigation }: BottomTabBarPr
   }, []);
 
   if (keyboardVisible) return null;
-  if (profile?.role === 'guardian') return <GuardianTabBar nightMode={nightMode} />;
+  if (profile?.role === 'guardian') {
+    return <GuardianTabBar nightMode={nightMode} state={state} navigation={navigation} />;
+  }
 
   const tabBg       = nightMode ? '#161B22' : '#FFFFFF';
   const activeClr   = '#2C3E8C';
