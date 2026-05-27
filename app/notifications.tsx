@@ -30,6 +30,26 @@ const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: s
   care_event_added:       { icon: 'calendar',          color: '#F59E0B', bg: '#FEF3C7' },
   voice_message:          { icon: 'mic',               color: '#DB2777', bg: '#FCE7F3' },
   sos_triggered:          { icon: 'warning',           color: '#DC2626', bg: '#FEE2E2' },
+  doctor_added:           { icon: 'medkit',            color: '#0891B2', bg: '#CFFAFE' },
+  doctor_updated:         { icon: 'medkit-outline',    color: '#D97706', bg: '#FEF3C7' },
+  doctor_deleted:         { icon: 'trash-outline',     color: '#DC2626', bg: '#FEE2E2' },
+  profile_updated:        { icon: 'person',            color: '#7C3AED', bg: '#EDE9FE' },
+  guardian_connected:     { icon: 'shield-checkmark',  color: '#16A34A', bg: '#DCFCE7' },
+  // ── Health-log types ──────────────────────────────────────────────────────
+  medicine_missed:        { icon: 'close-circle',      color: '#DC2626', bg: '#FEE2E2' },
+  health_log_bp:          { icon: 'heart',             color: '#EF4444', bg: '#FEE2E2' },
+  health_log_sugar:       { icon: 'flask',             color: '#F97316', bg: '#FFF7ED' },
+  health_log_mood:        { icon: 'happy',             color: '#A78BFA', bg: '#F3E8FF' },
+  health_log_sleep:       { icon: 'moon',              color: '#6D28D9', bg: '#EDE9FE' },
+  health_log_exercise:    { icon: 'walk',              color: '#10B981', bg: '#D1FAE5' },
+  health_log_symptom:     { icon: 'alert-circle',      color: '#F59E0B', bg: '#FEF3C7' },
+  health_log_emergency:   { icon: 'warning',           color: '#fff',    bg: '#DC2626' },
+  health_log_water:       { icon: 'water',             color: '#3B82F6', bg: '#DBEAFE' },
+  health_log_checkin:     { icon: 'star',              color: '#F59E0B', bg: '#FEF9C3' },
+  health_log_doctor:      { icon: 'person-circle',     color: '#0EA5E9', bg: '#E0F2FE' },
+  health_log_voice:       { icon: 'mic-circle',        color: '#D97706', bg: '#FEF3C7' },
+  health_log_meal:        { icon: 'restaurant',        color: '#F59E0B', bg: '#FFF7ED' },
+  health_log:             { icon: 'fitness',           color: '#64748B', bg: '#F1F5F9' },
 };
 
 const DEFAULT_META = { icon: 'notifications' as const, color: '#64748B', bg: '#F1F5F9' };
@@ -211,9 +231,16 @@ function NotifRow({
   onDelete: (id: string) => void;
 }) {
   const meta = TYPE_META[n.type] ?? DEFAULT_META;
+  const isEmergency = n.type === 'health_log_emergency' || (n.data as any)?.priority === 'emergency';
+  const isHighPriority = (n.data as any)?.priority === 'high';
   return (
     <Pressable
-      style={[s.row, !n.read && s.rowUnread]}
+      style={[
+        s.row,
+        !n.read && s.rowUnread,
+        isEmergency && s.rowEmergency,
+        isHighPriority && !isEmergency && s.rowHighPriority,
+      ]}
       onPress={() => { if (!n.read) onRead(n.id); }}
     >
       <View style={[s.iconCircle, { backgroundColor: meta.bg }]}>
@@ -268,7 +295,9 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, shadowRadius: 6, elevation: 1,
   },
-  rowUnread:      { backgroundColor: '#F0F7FF', borderLeftWidth: 3, borderLeftColor: '#2B7FC0' },
+  rowUnread:         { backgroundColor: '#F0F7FF', borderLeftWidth: 3, borderLeftColor: '#2B7FC0' },
+  rowEmergency:      { backgroundColor: '#FFF1F1', borderLeftWidth: 4, borderLeftColor: '#DC2626' },
+  rowHighPriority:   { backgroundColor: '#FFFBEB', borderLeftWidth: 3, borderLeftColor: '#F59E0B' },
   iconCircle:     { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   rowContent:     { flex: 1 },
   rowTop:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },

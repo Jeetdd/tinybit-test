@@ -29,6 +29,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
+import { notifyGuardiansOf } from '../../services/notifications';
 import { supabase } from '../../utils/supabase';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -227,6 +228,50 @@ export default function WellnessLogsScreen() {
       }
       setShowAddModal(false);
       await loadAllLogs();
+
+      // ── Notify connected guardians ──────────────────────────────────────────
+      if (user?.id && !editLog) {
+        const name = profile?.firstName || 'Your elder';
+        const notifMap: Record<string, { type: any; title: string; body: (v: any, v2: any, n: string | null) => string; priority?: string }> = {
+          blood_pressure: { type: 'health_log_bp',       title: '🩺 BP Logged',
+            body: (v, v2) => v && v2 ? `${name}: ${v}/${v2} mmHg` : `${name}: BP recorded`,
+            priority: payload.value > 140 ? 'high' : undefined },
+          blood_sugar:    { type: 'health_log_sugar',    title: '🩸 Blood Sugar',
+            body: (v) => `${name}: ${v} mg/dL`,
+            priority: (payload.value > 180 || payload.value < 70) ? 'high' : undefined },
+          heart_rate:     { type: 'health_log_bp',       title: '❤️ Heart Rate',        body: (v) => `${name}: ${v} bpm` },
+          spo2:           { type: 'health_log_bp',       title: '🫁 SpO₂ Logged',
+            body: (v) => `${name}: ${v}%`,
+            priority: payload.value < 95 ? 'high' : undefined },
+          temperature:    { type: 'health_log_bp',       title: '🌡️ Temperature',
+            body: (v) => `${name}: ${v}°C`,
+            priority: payload.value > 37.5 ? 'medium' : undefined },
+          sleep:          { type: 'health_log_sleep',    title: '😴 Sleep Logged',      body: (v, _v2, n) => `${name}: ${v}h — ${n ?? ''}` },
+          mood:           { type: 'health_log_mood',     title: '😊 Mood Update',       body: (v) => `${name}: mood ${v}/5` },
+          anxiety:        { type: 'health_log_mood',     title: '😰 Anxiety Level',
+            body: (v) => `${name}: anxiety ${v}/10`,
+            priority: payload.value >= 7 ? 'high' : payload.value >= 5 ? 'medium' : undefined },
+          depression:     { type: 'health_log_mood',     title: '🌧️ Mood / Depression',
+            body: (v) => `${name}: depression score ${v}/10`,
+            priority: payload.value >= 7 ? 'high' : payload.value >= 5 ? 'medium' : undefined },
+          exercise:       { type: 'health_log_exercise', title: '🚶 Exercise Logged',   body: (v) => `${name}: ${v}min of exercise` },
+          water:          { type: 'health_log_water',    title: '💧 Water Intake',      body: (v) => `${name}: ${v}ml water` },
+          weight:         { type: 'health_log',          title: '⚖️ Weight Logged',     body: (v) => `${name}: ${v}kg` },
+          symptoms:       { type: 'health_log_symptom',  title: '😣 Symptoms',          body: (_v, _v2, n) => `${name}: ${n ?? 'symptom logged'}` },
+          doctor_visit:   { type: 'health_log_doctor',   title: '👨‍⚕️ Doctor Visit',   body: (_v, _v2, n) => `${name}: ${n ?? 'visited doctor'}` },
+        };
+        const cfg = notifMap[activeType!];
+        if (cfg) {
+          notifyGuardiansOf(
+            user.id, user.id,
+            cfg.type,
+            cfg.title,
+            cfg.body(payload.value, payload.value2, payload.note),
+            cfg.priority ? { priority: cfg.priority } : {},
+          );
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────────
     } catch (e: any) {
       Alert.alert('Save Failed', e?.message ?? 'Could not save log. Please try again.');
     } finally {

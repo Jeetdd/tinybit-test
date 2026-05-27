@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
+import { notifyElderOf } from '../services/notifications';
 import { supabase } from '../utils/supabase';
 
 type Invite = {
@@ -81,6 +82,22 @@ export default function GuardianInviteCard() {
         .eq('id', linkId);
 
       if (error) throw error;
+
+      // Notify the guardian that their connection request was answered
+      const invite = invites.find(i => i.id === linkId);
+      if (invite?.guardian_id && user?.id) {
+        const elderName = profile?.fullName || profile?.firstName || 'Your elder';
+        if (action === 'accept') {
+          notifyElderOf(
+            invite.guardian_id, user.id,
+            'guardian_connected',
+            '🔗 Guardian Request Accepted',
+            `${elderName} accepted your guardian request`,
+          );
+        }
+        // Decline is silent — no need to create noise for the guardian
+      }
+
       setInvites(prev => prev.filter(i => i.id !== linkId));
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Something went wrong');

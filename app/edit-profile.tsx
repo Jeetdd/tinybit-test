@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from "../context/AuthContext";
+import { notifyElderOf } from "../services/notifications";
 import { supabase } from "../utils/supabase";
 
 const C = {
@@ -97,6 +98,16 @@ export default function EditProfileScreen() {
 
       // Only refresh local context when editing own profile
       if (!isEditingElder) await refreshProfile();
+
+      // Notify elder that their guardian updated their profile
+      if (isEditingElder && user?.id && editingId) {
+        notifyElderOf(
+          editingId, user.id,
+          'profile_updated',
+          '👤 Profile Updated',
+          `Your guardian updated your profile information`,
+        );
+      }
 
       Alert.alert("Success",
         isEditingElder

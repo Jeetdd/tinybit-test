@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GuardianHeader } from '../../components/guardian/GuardianHeader';
 import { CARD_SHADOW, G } from '../../components/guardian/theme';
 import { useAuth } from '../../context/AuthContext';
+import { notifyElderOf, notifyGuardiansOf } from '../../services/notifications';
 import { supabase } from '../../utils/supabase';
 
 const C = { headerStart: '#304B76', headerEnd: '#4B99CA', white: '#FFFFFF', bg: '#F7F9FC', text: '#1A3050', muted: '#8A9BB0', blue: '#4AA5D9', border: '#E8EDF2' };
@@ -256,6 +257,23 @@ function DoctorFormModal({
           }
         }
       }
+      // ── Notifications ──────────────────────────────────────────────
+      const isForElder = targetUserId !== user?.id;
+      const docLabel   = name.trim();
+      if (editDoctor) {
+        if (isForElder) {
+          notifyElderOf(targetUserId, user!.id, 'doctor_updated', '🩺 Doctor Updated', `Dr. ${docLabel} was updated by your guardian`);
+        } else {
+          notifyGuardiansOf(user!.id, user!.id, 'doctor_updated', '🩺 Doctor Updated', `Dr. ${docLabel} was updated in their records`);
+        }
+      } else {
+        if (isForElder) {
+          notifyElderOf(targetUserId, user!.id, 'doctor_added', '🩺 Doctor Added', `Dr. ${docLabel} was added to your doctors by your guardian`);
+        } else {
+          notifyGuardiansOf(user!.id, user!.id, 'doctor_added', '🩺 Doctor Added', `Dr. ${docLabel} was added to their doctors`);
+        }
+      }
+
       onSaved();
       onClose();
     } catch (e: any) {
@@ -439,6 +457,13 @@ export default function DoctorsScreen() {
         text: 'Remove', style: 'destructive',
         onPress: async () => {
           await supabase.from('user_doctors').delete().eq('id', id);
+          // Notify the affected party
+          const isForElder = targetId !== user?.id;
+          if (isForElder && user?.id) {
+            notifyElderOf(targetId, user.id, 'doctor_deleted', '🩺 Doctor Removed', `Dr. ${name} was removed from your doctors by your guardian`);
+          } else if (user?.id) {
+            notifyGuardiansOf(user.id, user.id, 'doctor_deleted', '🩺 Doctor Removed', `Dr. ${name} was removed from their doctors`);
+          }
           loadDoctors(targetId);
         },
       },

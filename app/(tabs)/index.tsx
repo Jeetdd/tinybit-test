@@ -652,7 +652,6 @@ function ElderHomeScreen() {
           </View>
           <View style={s.toolsGrid}>
             <ToolCard emoji="🏥" title="Health Log" sub="Medicine, mood, vitals" color="#1E3A5F" target="/(tabs)/health-log" />
-            <ToolCard emoji="💧" title="Wellness Logs" sub="Track vitals & habits" color="#3B82F6" target="/(tabs)/wellness-logs" />
             <ToolCard emoji="🌤️" title="Weather" sub="Clothing suggestions" color="#F59E0B" target="/weather" />
             <ToolCard emoji="🥗" title="Calorie Scan" sub="AI food scanner" color="#16A34A" target="/calorie-calculator" />
             <ToolCard emoji="🎓" title="Help & Tutorials" sub="Learn how to use" color="#8B5CF6" target="/help" />

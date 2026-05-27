@@ -21,7 +21,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, Modal, Pressable,
+  ActivityIndicator, Alert, Animated, KeyboardAvoidingView,
+  Modal, Platform, Pressable,
   ScrollView, StatusBar, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,8 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL } from '../../config/api';
+import { notifyGuardiansOf } from '../../services/notifications';
+import type { NotifType } from '../../services/notifications';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type ModalType =
@@ -84,6 +87,124 @@ const SLEEP_OPTIONS = [
 ];
 
 const WATER_GOAL = 8;
+
+// ── Guardian notification config builder ──────────────────────────────────────
+type NotifConfig = { notifType: NotifType; title: string; body: string; data?: Record<string, unknown> };
+function buildHealthNotifConfig(type: string, value: any, name: string): NotifConfig | null {
+  switch (type) {
+    case 'medicine':
+      if (value?.status === 'skipped') return {
+        notifType: 'medicine_missed', title: '⚠️ Medicine Missed',
+        body: `${name} skipped ${value.name ?? 'a medicine'}`,
+        data: { priority: 'high' },
+      };
+      if (value?.status === 'taken') return {
+        notifType: 'medicine_taken', title: '💊 Medicine Taken',
+        body: `${name} took ${value.name ?? 'medicine'}`,
+      };
+      return null;
+
+    case 'mood': {
+      const isLow = ['sad', 'anxious', 'tired'].includes(value?.mood ?? '');
+      return {
+        notifType: 'health_log_mood',
+        title: isLow ? `😔 ${name} Feeling Low` : `😊 Mood Update`,
+        body: `${name} is feeling ${value?.mood ?? '?'} today`,
+        data: isLow ? { priority: 'medium' } : {},
+      };
+    }
+
+    case 'water': return {
+      notifType: 'health_log_water',
+      title: '💧 Water Intake',
+      body: `${name} logged +1 glass of water`,
+    };
+
+    case 'bp': {
+      const sys = value?.systolic as number | undefined;
+      const isHigh = value?.status === 'high' || (sys !== undefined && sys > 140);
+      return {
+        notifType: 'health_log_bp',
+        title: isHigh ? `🩺 BP High Alert` : `🩺 Blood Pressure Logged`,
+        body: sys ? `${name}: ${sys}/${value?.diastolic ?? '?'} mmHg` : `${name}: BP is ${value?.status ?? 'logged'}`,
+        data: isHigh ? { priority: 'high' } : {},
+      };
+    }
+
+    case 'sugar': {
+      const sv = value?.value as number | undefined;
+      const isHigh = value?.status === 'high' || (sv !== undefined && sv > 180);
+      const isLow  = value?.status === 'low'  || (sv !== undefined && sv < 70);
+      return {
+        notifType: 'health_log_sugar',
+        title: isHigh ? `🩸 Blood Sugar High` : isLow ? `🩸 Blood Sugar Low` : `🩸 Blood Sugar Logged`,
+        body: sv ? `${name}: ${sv} mg/dL` : `${name}: blood sugar is ${value?.status ?? 'logged'}`,
+        data: (isHigh || isLow) ? { priority: 'high' } : {},
+      };
+    }
+
+    case 'symptom':
+      if (value?.emergency) return {
+        notifType: 'health_log_emergency',
+        title: `🚨 Emergency Symptom!`,
+        body: `${name} reported critical symptoms. Needs immediate attention!`,
+        data: { priority: 'emergency' },
+      };
+      return {
+        notifType: 'health_log_symptom',
+        title: `😣 Symptoms Logged`,
+        body: `${name} reported pain level ${value?.painLevel ?? '?'}/10`,
+      };
+
+    case 'sleep': {
+      const isPoor = value?.quality === 'poor' || value?.quality === 'interrupted';
+      return {
+        notifType: 'health_log_sleep',
+        title: isPoor ? `😫 Poor Sleep Alert` : `😴 Sleep Logged`,
+        body: `${name}: ${value?.quality ?? ''} sleep, ${value?.hours ?? '?'}h`,
+        data: isPoor ? { priority: 'medium' } : {},
+      };
+    }
+
+    case 'checkin': {
+      const isUnwell = value?.status === 'not_well';
+      return {
+        notifType: 'health_log_checkin',
+        title: isUnwell ? `🤒 ${name} Not Feeling Well` : `🌟 Daily Check-In`,
+        body: isUnwell
+          ? `${name} checked in as unwell${value?.complaint ? `: ${value.complaint}` : ''}`
+          : `${name} checked in: ${value?.status ?? 'done'}`,
+        data: isUnwell ? { priority: 'high' } : {},
+      };
+    }
+
+    case 'voice_note': return {
+      notifType: 'health_log_voice',
+      title: '🎤 Voice Log Added',
+      body: `${name} added a voice health note`,
+    };
+
+    case 'activity': return {
+      notifType: 'health_log_exercise',
+      title: '🚶 Activity Logged',
+      body: `${name} logged ${value?.label ?? value?.activity ?? 'activity'}`,
+    };
+
+    case 'meal': return {
+      notifType: 'health_log_meal',
+      title: '🍽️ Meal Logged',
+      body: `${name} had ${value?.label ?? value?.meal ?? 'a meal'}`,
+    };
+
+    case 'doctor': return {
+      notifType: 'health_log_doctor',
+      title: '👨‍⚕️ Doctor Visit',
+      body: `${name} visited ${value?.doctorName || 'a doctor'}`,
+    };
+
+    default: return null;
+  }
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function todayRange() {
@@ -207,6 +328,21 @@ export default function HealthLogScreen() {
       });
       if (error) throw error;
       await loadTodayData();
+
+      // ── Dispatch in-app DB notification to all connected guardians ──────────
+      const elderName = profile?.firstName || 'Your elder';
+      const notifCfg = buildHealthNotifConfig(type, value, elderName);
+      if (notifCfg) {
+        notifyGuardiansOf(
+          user.id, user.id,
+          notifCfg.notifType,
+          notifCfg.title,
+          notifCfg.body,
+          notifCfg.data ?? {},
+        );
+      }
+      // ────────────────────────────────────────────────────────────────────────
+
       return true;
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not save log.');
@@ -799,47 +935,68 @@ export default function HealthLogScreen() {
   // ════════════════════════════════════════════════════════════════════════════
   const renderVoiceModal = () => (
     <Modal visible={activeModal === 'voice'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
-        <View style={m.handle} />
-        <View style={m.head}>
-          <Text style={m.headTitle}>🎤 Voice Log</Text>
-          <Pressable onPress={() => setActiveModal(null)}><Ionicons name="close" size={28} color="#64748B" /></Pressable>
-        </View>
-        <View style={[m.body, { alignItems: 'center' }]}>
-          <Text style={m.voiceHint}>Speak or type to log your health</Text>
-          <View style={m.voiceExamples}>
-            {['"I took my medicine"', '"Drank 2 glasses of water"', '"I have a headache"', '"Feeling happy today"'].map(e => (
-              <View key={e} style={m.voiceEx}><Text style={m.voiceExTxt}>{e}</Text></View>
-            ))}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+      >
+        <View style={m.sheet}>
+          <View style={m.handle} />
+          <View style={m.head}>
+            <Text style={m.headTitle}>🎤 Voice Log</Text>
+            <Pressable onPress={() => setActiveModal(null)}><Ionicons name="close" size={28} color="#64748B" /></Pressable>
           </View>
-          <Pressable style={[m.micBtn, voiceRecording && m.micBtnOn]} onPress={() => {
-            setVoiceRecording(r => !r);
-            if (voiceRecording) return;
-            setTimeout(() => {
-              setVoiceRecording(false);
-              Alert.alert('Voice', 'Full voice recording is available when connected to the backend. Type your log below.');
-            }, 2000);
-          }}>
-            <Ionicons name={voiceRecording ? 'stop-circle' : 'mic'} size={52} color="#fff" />
-            <Text style={m.micTxt}>{voiceRecording ? 'Listening...' : 'Tap to Speak'}</Text>
-          </Pressable>
 
-          <Text style={m.orLine}>— or type below —</Text>
-          <TextInput style={m.voiceInput} multiline value={voiceTranscript} onChangeText={setVoiceTranscript}
-            placeholder='"I took my metformin tablet"' placeholderTextColor="#94A3B8" />
-          {voiceParsed ? (
-            <View style={m.parsedBox}>
-              <Text style={m.parsedTxt}>✅ {voiceParsed}</Text>
-            </View>
-          ) : null}
-          <Pressable style={[m.saveBtn, { marginTop: 14, width: '100%' }, (!voiceTranscript.trim() || saving) && m.saveBtnOff]}
-            disabled={!voiceTranscript.trim() || saving}
-            onPress={() => parseVoiceLog(voiceTranscript)}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[m.body, { alignItems: 'center', paddingBottom: 32 }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={m.saveBtnTxt}>Log This</Text>}
-          </Pressable>
+            <Text style={m.voiceHint}>Speak or type to log your health</Text>
+            <View style={m.voiceExamples}>
+              {['"I took my medicine"', '"Drank 2 glasses of water"', '"I have a headache"', '"Feeling happy today"'].map(e => (
+                <View key={e} style={m.voiceEx}><Text style={m.voiceExTxt}>{e}</Text></View>
+              ))}
+            </View>
+            <Pressable style={[m.micBtn, voiceRecording && m.micBtnOn]} onPress={() => {
+              setVoiceRecording(r => !r);
+              if (voiceRecording) return;
+              setTimeout(() => {
+                setVoiceRecording(false);
+                Alert.alert('Voice', 'Full voice recording is available when connected to the backend. Type your log below.');
+              }, 2000);
+            }}>
+              <Ionicons name={voiceRecording ? 'stop-circle' : 'mic'} size={52} color="#fff" />
+              <Text style={m.micTxt}>{voiceRecording ? 'Listening...' : 'Tap to Speak'}</Text>
+            </Pressable>
+
+            <Text style={m.orLine}>— or type below —</Text>
+            <TextInput
+              style={m.voiceInput}
+              multiline
+              value={voiceTranscript}
+              onChangeText={setVoiceTranscript}
+              placeholder='"I took my metformin tablet"'
+              placeholderTextColor="#94A3B8"
+              returnKeyType="done"
+              blurOnSubmit
+            />
+            {voiceParsed ? (
+              <View style={m.parsedBox}>
+                <Text style={m.parsedTxt}>✅ {voiceParsed}</Text>
+              </View>
+            ) : null}
+            <Pressable
+              style={[m.saveBtn, { marginTop: 14, width: '100%' }, (!voiceTranscript.trim() || saving) && m.saveBtnOff]}
+              disabled={!voiceTranscript.trim() || saving}
+              onPress={() => parseVoiceLog(voiceTranscript)}
+            >
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={m.saveBtnTxt}>Log This</Text>}
+            </Pressable>
+          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 

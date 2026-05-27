@@ -64,6 +64,10 @@ type ElderLoc = {
   address: string | null; is_sharing: boolean; updated_at: string;
 };
 
+type HealthLogEntry = {
+  id: string; type: string; value: any; note: string | null; logged_at: string;
+};
+
 function isTakenToday(logs: { taken_at: string }[]) {
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
   const dayEnd   = new Date(); dayEnd.setHours(23, 59, 59, 999);
@@ -89,6 +93,35 @@ function getMapRegion(locs: ElderLoc[]) {
     latitudeDelta:  Math.max((maxLat - minLat) * 1.6, 0.012),
     longitudeDelta: Math.max((maxLng - minLng) * 1.6, 0.012),
   };
+}
+
+// ── Health log display helpers ───────────────────────────────────────────────
+const LOG_EMOJI: Record<string, string> = {
+  medicine: '💊', mood: '😊', water: '💧', bp: '🩺', sugar: '🩸',
+  symptom: '😣', sleep: '😴', checkin: '🌟', voice_note: '🎤',
+  activity: '🚶', meal: '🍽️', doctor: '👨‍⚕️',
+};
+const LOG_LABEL: Record<string, string> = {
+  medicine: 'Medicine', mood: 'Mood', water: 'Water', bp: 'Blood Pressure',
+  sugar: 'Blood Sugar', symptom: 'Symptoms', sleep: 'Sleep', checkin: 'Check-In',
+  voice_note: 'Voice Note', activity: 'Activity', meal: 'Meal', doctor: 'Doctor Visit',
+};
+function buildLogSummary(log: { type: string; value: any; note: string | null }): string {
+  const v = log.value ?? {};
+  switch (log.type) {
+    case 'medicine': return v.name ? `${v.name} — ${v.status ?? ''}` : (v.status ?? '');
+    case 'mood':     return `Feeling ${v.mood ?? '?'}`;
+    case 'water':    return `+${v.glasses ?? 1} glass`;
+    case 'bp':       return v.systolic ? `${v.systolic}/${v.diastolic} mmHg` : (v.status ?? 'recorded');
+    case 'sugar':    return v.value ? `${v.value} mg/dL` : (v.status ?? 'recorded');
+    case 'symptom':  return v.emergency ? '🚨 Emergency symptoms!' : `Pain ${v.painLevel ?? '?'}/10`;
+    case 'sleep':    return `${v.quality ?? ''} · ${v.hours ?? '?'}h`;
+    case 'checkin':  return v.complaint ? `Not well: ${v.complaint}` : (v.status ?? 'done');
+    case 'activity': return v.label ?? v.activity ?? 'logged';
+    case 'meal':     return v.label ?? v.meal ?? 'meal';
+    case 'doctor':   return v.doctorName ? `Dr. ${v.doctorName}` : 'visit';
+    default:         return log.note ?? '–';
+  }
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -156,6 +189,8 @@ export default function GuardianHomeScreen() {
   const [loadingMeds,     setLoadingMeds]     = useState(false);
   const [elderLocations,  setElderLocations]  = useState<Record<string, ElderLoc>>({});
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
+  const [healthLogs,      setHealthLogs]      = useState<HealthLogEntry[]>([]);
+  const [loadingLogs,     setLoadingLogs]     = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -256,6 +291,39 @@ export default function GuardianHomeScreen() {
     );
     return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
   }, [elderIdKey]);
+
+  // ── Health Logs for active elder ──────────────────────────────────────────
+  useEffect(() => {
+    if (!active?.elder_id) { setHealthLogs([]); return; }
+    const elderId = active.elder_id;
+
+    const loadLogs = async () => {
+      setLoadingLogs(true);
+      try {
+        const { data } = await supabase
+          .from('health_logs')
+          .select('id, type, value, note, logged_at')
+          .eq('user_id', elderId)
+          .order('logged_at', { ascending: false })
+          .limit(8);
+        setHealthLogs((data ?? []) as HealthLogEntry[]);
+      } catch { /* RLS may not be set up yet — fail silently */ }
+      finally { setLoadingLogs(false); }
+    };
+
+    void loadLogs();
+
+    const ch = supabase
+      .channel(`guardian-hlogs-${elderId}`)
+      .on('postgres_changes' as any,
+        { event: 'INSERT', schema: 'public', table: 'health_logs', filter: `user_id=eq.${elderId}` },
+        (payload: any) => {
+          if (payload.new) setHealthLogs(prev => [payload.new as HealthLogEntry, ...prev].slice(0, 8));
+        })
+      .subscribe();
+
+    return () => { void supabase.removeChannel(ch); };
+  }, [active?.elder_id]);
 
   const guardianName = profile?.firstName || profile?.fullName?.split(' ')[0] || 'Guardian';
   const todayMeds = meds.map(m => ({ ...m, taken: isTakenToday(m.medicine_logs) }));
@@ -871,6 +939,60 @@ export default function GuardianHomeScreen() {
                 </View>
               </View>
 
+              {/* ── Live Health Activity ─────────────────────────────────── */}
+              <View style={s.sectionHeader}>
+                <View>
+                  <Text style={s.sectionTitle}>⚡ Live Health Activity</Text>
+                  <Text style={s.sectionSub}>Real-time from Health Log</Text>
+                </View>
+                <Pressable onPress={() => router.push('/guardian-summary' as any)}>
+                  <Text style={s.sectionLink}>Full Report</Text>
+                </Pressable>
+              </View>
+              <View style={[s.card, CARD_SHADOW]}>
+                {loadingLogs ? (
+                  <ActivityIndicator color={G.accent} style={{ marginVertical: 18 }} />
+                ) : healthLogs.length === 0 ? (
+                  <View style={s.noLogsWrap}>
+                    <Ionicons name="pulse-outline" size={28} color={G.muted} />
+                    <Text style={s.noLogsText}>No health logs yet today</Text>
+                    <Text style={s.noLogsSub}>Activity from the Health Log screen will appear here in real time</Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 2 }}>
+                    {healthLogs.map((log, i) => {
+                      const isEmergency = log.value?.emergency === true;
+                      const isPriority  = log.value?.status === 'skipped' || log.value?.status === 'high' || log.value?.status === 'low';
+                      return (
+                        <View
+                          key={log.id}
+                          style={[
+                            s.logRow,
+                            i < healthLogs.length - 1 && s.logRowBorder,
+                            isEmergency && s.logRowEmergency,
+                            isPriority && !isEmergency && s.logRowPriority,
+                          ]}
+                        >
+                          <View style={[s.logIconCircle, { backgroundColor: isEmergency ? '#FEE2E2' : '#F0F7FF' }]}>
+                            <Text style={s.logEmoji}>{LOG_EMOJI[log.type] ?? '📝'}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[s.logType, isEmergency && { color: '#DC2626' }]}>
+                              {LOG_LABEL[log.type] ?? log.type}
+                              {isEmergency ? ' 🚨' : ''}
+                            </Text>
+                            <Text style={s.logSummary} numberOfLines={1}>
+                              {buildLogSummary(log)}
+                            </Text>
+                          </View>
+                          <Text style={s.logTime}>{timeAgo(log.logged_at)}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
               {/* ── Bottom spacer ────────────────────────────────────────── */}
               <View style={{ height: 32 }} />
             </>
@@ -1271,6 +1393,29 @@ const s = StyleSheet.create({
   },
   vaultRowName: { fontSize: 15, fontWeight: '800', color: G.text },
   vaultRowSub:  { fontSize: 12, fontWeight: '500', color: G.muted, marginTop: 2 },
+  // ── Live Health Activity ──────────────────────────────────────────────────
+  noLogsWrap: {
+    alignItems: 'center', paddingVertical: 24, gap: 8,
+  },
+  noLogsText: { fontSize: 15, fontWeight: '700', color: G.text },
+  noLogsSub:  { fontSize: 12, fontWeight: '500', color: G.muted, textAlign: 'center' },
+
+  logRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, paddingHorizontal: 4,
+  },
+  logRowBorder:    { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  logRowEmergency: { backgroundColor: '#FFF1F1', borderRadius: 12, paddingHorizontal: 8, marginHorizontal: -4 },
+  logRowPriority:  { backgroundColor: '#FFFBEB', borderRadius: 12, paddingHorizontal: 8, marginHorizontal: -4 },
+  logIconCircle: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  logEmoji:   { fontSize: 20 },
+  logType:    { fontSize: 13, fontWeight: '800', color: G.text },
+  logSummary: { fontSize: 12, fontWeight: '500', color: G.muted, marginTop: 1 },
+  logTime:    { fontSize: 11, fontWeight: '600', color: G.muted, flexShrink: 0 },
+
   vaultCancelBtn: {
     height: 50, borderRadius: 16, backgroundColor: '#F1F5F9',
     alignItems: 'center', justifyContent: 'center', marginTop: 4,

@@ -10,7 +10,27 @@ export type NotifType =
   | 'check_in_done'
   | 'care_event_added'
   | 'voice_message'
-  | 'sos_triggered';
+  | 'sos_triggered'
+  | 'doctor_added'
+  | 'doctor_updated'
+  | 'doctor_deleted'
+  | 'profile_updated'
+  | 'guardian_connected'
+  // ── Health-log types ─────────────────────────────────────────
+  | 'medicine_missed'
+  | 'health_log_bp'
+  | 'health_log_sugar'
+  | 'health_log_mood'
+  | 'health_log_sleep'
+  | 'health_log_exercise'
+  | 'health_log_symptom'
+  | 'health_log_emergency'
+  | 'health_log_water'
+  | 'health_log_checkin'
+  | 'health_log_doctor'
+  | 'health_log_voice'
+  | 'health_log_meal'
+  | 'health_log';
 
 async function insert(
   recipientId: string,

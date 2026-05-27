@@ -277,29 +277,37 @@ const analyzeReport = async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 5. ANALYZE FOOD — Gemini Vision (primary) → OpenAI GPT-4o-mini (fallback)
 // ═══════════════════════════════════════════════════════════════════════════════
-const FOOD_PROMPT = `You are a certified nutrition expert AI. Analyze this food photo and return detailed nutritional information.
-Respond with ONLY valid JSON (no markdown, no extra text):
+const FOOD_PROMPT = `You are a certified nutrition expert AI. Carefully analyze this specific food photo and calculate REAL nutritional values for exactly what you see in the image.
+
+IMPORTANT: Do NOT copy the example values below — they are only showing the required JSON format. Calculate actual nutrition based on the real food items visible in this photo.
+
+Respond with ONLY valid JSON (no markdown, no extra text) using this exact structure:
 {
   "detected": true,
-  "foodItems": ["item1", "item2"],
-  "totalCalories": 350,
-  "protein": 12,
-  "carbohydrates": 45,
-  "fat": 8,
-  "fiber": 3,
-  "sugar": 10,
-  "sodium": 400,
-  "vitamins": ["Vitamin A", "Vitamin C", "Calcium"],
-  "healthScore": 7,
-  "healthRating": "Good",
-  "portionSize": "medium",
-  "servingInfo": "1 plate (~300g)",
-  "suggestions": ["Consider adding more protein", "Good source of fiber"],
-  "dietaryTags": ["vegetarian"],
-  "glycemicIndex": "medium"
+  "foodItems": ["<actual food item 1>", "<actual food item 2>"],
+  "totalCalories": <calculated integer for this specific meal>,
+  "protein": <grams of protein as number>,
+  "carbohydrates": <grams of carbs as number>,
+  "fat": <grams of fat as number>,
+  "fiber": <grams of fiber as number>,
+  "sugar": <grams of sugar as number>,
+  "sodium": <milligrams of sodium as number>,
+  "vitamins": ["<vitamin 1>", "<vitamin 2>"],
+  "healthScore": <1-10 integer>,
+  "healthRating": "<Excellent|Good|Moderate|Poor>",
+  "portionSize": "<small|medium|large>",
+  "servingInfo": "<description of portion, e.g. '1 plate (~400g)'>",
+  "suggestions": ["<health tip 1>", "<health tip 2>"],
+  "dietaryTags": ["<e.g. vegetarian, high-protein, low-carb>"],
+  "glycemicIndex": "<low|medium|high>"
 }
-If no food is detected in the image, respond with {"detected": false} only.
-All numeric values must be numbers (not strings). healthRating must be: "Excellent", "Good", "Moderate", or "Poor".`;
+
+Rules:
+- Identify every visible food item accurately — do NOT guess generically.
+- Calculate totalCalories by summing estimated calories for each item at the visible portion size.
+- All numeric fields must be actual numbers (integers or decimals), NOT the example placeholders.
+- healthRating must be exactly one of: "Excellent", "Good", "Moderate", or "Poor".
+- If no food is detected in the image, respond with ONLY: {"detected": false}`;
 
 const analyzeFood = async (req, res) => {
   try {
@@ -319,7 +327,7 @@ const analyzeFood = async (req, res) => {
             { text: FOOD_PROMPT },
           ],
         }],
-        generationConfig: { maxOutputTokens: 800, temperature: 0.2 },
+        generationConfig: { maxOutputTokens: 800, temperature: 0.4 },
       }, 35_000);
 
       if (geminiResp.ok) {
@@ -352,6 +360,7 @@ const analyzeFood = async (req, res) => {
           ],
         }],
         max_tokens: 800,
+        temperature: 0.4,
       }),
     });
 

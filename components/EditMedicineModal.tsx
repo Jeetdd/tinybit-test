@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { broadcastGuardianUpdate, notifyElder } from '../services/pushNotifications';
+import { notifyElderOf, notifyGuardiansOf } from '../services/notifications';
 import { supabase } from '../utils/supabase';
 
 type Section = 'Morning' | 'Afternoon' | 'Night';
@@ -252,6 +253,21 @@ export default function EditMedicineModal({ visible, medicine, onClose, onUpdate
           '💊 Medicine Updated',
           `${name.trim()} has been updated by your guardian`,
         );
+        // In-app DB notification → elder sees it in the Notifications screen
+        notifyElderOf(
+          targetUserId, user!.id,
+          'medicine_updated',
+          '💊 Medicine Updated',
+          `${name.trim()} was updated by your guardian`,
+        );
+      } else if (user?.id) {
+        // Elder updated their own medicine → notify all connected guardians
+        notifyGuardiansOf(
+          user.id, user.id,
+          'medicine_updated',
+          '💊 Medicine Updated',
+          `${name.trim()} was updated in their schedule`,
+        );
       }
 
       onUpdated();
@@ -290,6 +306,21 @@ export default function EditMedicineModal({ visible, medicine, onClose, onUpdate
                   targetUserId,
                   '💊 Medicine Removed',
                   `${medicine.name} has been removed from your schedule by your guardian`,
+                );
+                // In-app DB notification → elder sees it in the Notifications screen
+                notifyElderOf(
+                  targetUserId, user!.id,
+                  'medicine_deleted',
+                  '💊 Medicine Removed',
+                  `${medicine.name} was removed from your schedule by your guardian`,
+                );
+              } else if (user?.id) {
+                // Elder deleted their own medicine → notify all connected guardians
+                notifyGuardiansOf(
+                  user.id, user.id,
+                  'medicine_deleted',
+                  '💊 Medicine Removed',
+                  `${medicine.name} was removed from their schedule`,
                 );
               }
 
