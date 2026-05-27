@@ -10,13 +10,20 @@
     },
     "preview": {
       "distribution": "internal",
-       "android": {
+      "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://tinybit-test-production.up.railway.app/api",
+        "EXPO_PUBLIC_OWM_API_KEY": "5469a7d05ccb92456657709cced7668e"
       }
-
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://tinybit-test-production.up.railway.app/api",
+        "EXPO_PUBLIC_OWM_API_KEY": "5469a7d05ccb92456657709cced7668e"
+      }
     }
   },
   "submit": {
