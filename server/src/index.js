@@ -27,18 +27,21 @@ app.listen(PORT, '0.0.0.0', () => {
   if (!process.env.GEMINI_API_KEY)          console.warn('⚠️  GEMINI_API_KEY not set');
 });
 
-// ── Routes — loaded after server is already listening ────────────────────────
-try {
-  app.use('/api/ai',          require('./routes/ai.routes'));
-  app.use('/api/guardian',    require('./routes/guardian.routes'));
-  app.use('/api/health-card', require('./routes/health-card.routes'));
-  app.use('/admin',           require('./routes/admin.routes'));
-  console.log('✅ All routes loaded');
-} catch (err) {
-  console.error('❌ Route load error:', err.message);
-  console.error(err.stack);
-  // Server stays alive — healthcheck passes, but feature routes fail
+// ── Routes — each mounted independently so one crash can't silence the rest ──
+function mountRoute(path, routeFile) {
+  try {
+    app.use(path, require(routeFile));
+    console.log(`✅ Route mounted: ${path}`);
+  } catch (err) {
+    console.error(`❌ Failed to mount ${path}: ${err.message}`);
+    console.error(err.stack);
+  }
 }
+
+mountRoute('/api/ai',          './routes/ai.routes');
+mountRoute('/api/guardian',    './routes/guardian.routes');
+mountRoute('/api/health-card', './routes/health-card.routes');
+mountRoute('/admin',           './routes/admin.routes');
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

@@ -1,4 +1,9 @@
-const QRCode = require('qrcode');
+// Lazy-loaded so a missing package can't crash route registration at startup
+let _QRCode = null;
+function getQRCode() {
+  if (!_QRCode) _QRCode = require('qrcode');
+  return _QRCode;
+}
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -615,7 +620,7 @@ const getHealthCardQR = async (req, res) => {
     const serverUrl = process.env.SERVER_URL || 'http://192.168.0.240:5000';
     const scanUrl = `${serverUrl}/api/health-card/${token}`;
 
-    const qrDataUrl = await QRCode.toDataURL(scanUrl, {
+    const qrDataUrl = await getQRCode().toDataURL(scanUrl, {
       errorCorrectionLevel: 'M',
       margin: 2,
       width: 300,
