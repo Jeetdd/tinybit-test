@@ -7,7 +7,13 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "node": "20.18.0"
+      "node": "20.18.0",
+      "cache": {
+        "key": "dev-v2"
+      },
+      "env": {
+        "npm_config_legacy_peer_deps": "true"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -15,7 +21,11 @@
         "buildType": "apk"
       },
       "node": "20.18.0",
+      "cache": {
+        "key": "preview-v2"
+      },
       "env": {
+        "npm_config_legacy_peer_deps": "true",
         "EXPO_PUBLIC_API_BASE_URL": "https://tinybit-test-production.up.railway.app/api",
         "EXPO_PUBLIC_OWM_API_KEY": "5469a7d05ccb92456657709cced7668e"
       }
@@ -23,7 +33,11 @@
     "production": {
       "autoIncrement": true,
       "node": "20.18.0",
+      "cache": {
+        "key": "prod-v2"
+      },
       "env": {
+        "npm_config_legacy_peer_deps": "true",
         "EXPO_PUBLIC_API_BASE_URL": "https://tinybit-test-production.up.railway.app/api",
         "EXPO_PUBLIC_OWM_API_KEY": "5469a7d05ccb92456657709cced7668e"
       }
