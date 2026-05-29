@@ -318,14 +318,16 @@ export default function HealthVaultScreen() {
         .from('health-records')
         .upload(storagePath, blob, { contentType: mimeType, upsert: false });
 
-      if (!uploadError) {
+      if (uploadError) {
+        console.warn('[Health Vault] Supabase upload failed:', uploadError.message);
+      } else {
         const { data: urlData } = supabase.storage
           .from('health-records')
           .getPublicUrl(storagePath);
         storageUri = urlData.publicUrl;
       }
-    } catch {
-      // Fall back to local URI silently
+    } catch (uploadErr: any) {
+      console.warn('[Health Vault] Storage upload exception:', uploadErr?.message);
     }
 
     const rec = {
@@ -567,24 +569,41 @@ export default function HealthVaultScreen() {
       if (!token) { setForecastLoading(false); return; }
 
       // Read the file as base64.
-      // Remote URLs: fetch → ArrayBuffer → btoa (no file-system dependency, works reliably).
-      // Local device URIs: use expo-file-system/legacy readAsStringAsync.
+      // Remote (Supabase) URLs: fetch → blob → FileReader.readAsDataURL
+      //   (FileReader handles null bytes correctly; btoa can silently truncate binary PDFs)
+      // Local device URIs: expo-file-system/legacy, with a clear error if the temp path expired.
       let base64 = '';
       const isRemote = r.uri.startsWith('http://') || r.uri.startsWith('https://');
+
       if (isRemote) {
         const dlResp = await fetch(r.uri);
         if (!dlResp.ok) throw new Error(`Could not download the document (HTTP ${dlResp.status}). Try uploading again.`);
-        const buffer = await dlResp.arrayBuffer();
-        const bytes  = new Uint8Array(buffer);
-        // Build binary string in chunks to avoid call-stack overflow on large files
-        const CHUNK  = 4096;
-        let binary   = '';
-        for (let i = 0; i < bytes.length; i += CHUNK) {
-          binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
-        }
-        base64 = btoa(binary);
+        const blob = await dlResp.blob();
+        base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            resolve(dataUrl?.split(',')[1] ?? '');
+          };
+          reader.onerror = () => reject(new Error('Could not read the file. Please try again.'));
+          reader.readAsDataURL(blob);
+        });
       } else {
-        base64 = await (FileSystem as any).readAsStringAsync(r.uri, { encoding: 'base64' });
+        // Local device path — might be a stale DocumentPicker temp URI
+        try {
+          const result = await (FileSystem as any).readAsStringAsync(r.uri, { encoding: 'base64' });
+          base64 = typeof result === 'string' ? result : '';
+        } catch {
+          base64 = '';
+        }
+        if (!base64 || base64.length < 100) {
+          Alert.alert(
+            "File Not Accessible",
+            "This record's file is stored only on your device and can no longer be read (the temporary access has expired).\n\nPlease delete this record and upload the file again to enable AI analysis.",
+          );
+          setForecastModal(false);
+          return;
+        }
       }
 
       if (!base64 || base64.length < 100) {
