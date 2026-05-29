@@ -1,6 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import * as Linking from 'expo-linking';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabase';
 
@@ -83,10 +84,41 @@ export async function signInWithGoogle(): Promise<{ user: User } | null> {
     const qs = (callbackUrl.split('?')[1] ?? '').split('#')[0];
     const code = new URLSearchParams(qs).get('code') ?? '';
     console.log('[OAuth] Exchanging PKCE code...');
-    const { data: ex, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
-    console.log('[OAuth] Exchange result — user:', ex?.user?.email ?? 'null', '| error:', exErr?.message ?? 'none');
-    if (exErr) throw exErr;
-    sessionUser = ex?.user ?? null;
+
+    // On iOS without WebCrypto, exchangeCodeForSession fires SIGNED_IN but its
+    // Promise never resolves (Supabase SDK bug with plain PKCE challenge).
+    // Race the exchange promise against the SIGNED_IN auth-state event so
+    // whichever arrives first unblocks the flow.
+    sessionUser = await new Promise<User | null>((resolve, reject) => {
+      let settled = false;
+
+      const settle = (user: User | null, err?: Error) => {
+        if (settled) return;
+        settled = true;
+        authSub.unsubscribe();
+        if (err) reject(err);
+        else resolve(user);
+      };
+
+      // Register BEFORE starting the exchange — SIGNED_IN fires during the
+      // exchange and must not be missed.
+      const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
+        (event, session) => {
+          if (event === 'SIGNED_IN') {
+            console.log('[OAuth] SIGNED_IN received, user:', session?.user?.email ?? 'null');
+            settle(session?.user ?? null);
+          }
+        }
+      );
+
+      supabase.auth.exchangeCodeForSession(code)
+        .then(({ data: ex, error: exErr }) => {
+          console.log('[OAuth] Exchange result — user:', ex?.user?.email ?? 'null', '| error:', exErr?.message ?? 'none');
+          if (exErr) settle(null, exErr);
+          else settle(ex?.user ?? ex?.session?.user ?? null);
+        })
+        .catch((err) => settle(null, err));
+    });
 
   } else if (hasAccessToken) {
     const sep = callbackUrl.includes('#') ? '#' : '?';
@@ -108,4 +140,27 @@ export async function signInWithGoogle(): Promise<{ user: User } | null> {
 
   console.log('[OAuth] Done. user:', sessionUser.email);
   return { user: sessionUser };
+}
+
+export async function signInWithApple(): Promise<{ user: User } | null> {
+  console.log('[OAuth] Starting Apple sign-in...');
+
+  const credential = await AppleAuthentication.signInAsync({
+    requestedScopes: [
+      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+      AppleAuthentication.AppleAuthenticationScope.EMAIL,
+    ],
+  });
+
+  if (!credential.identityToken) throw new Error('Apple sign-in failed: no identity token');
+
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: 'apple',
+    token: credential.identityToken,
+  });
+
+  if (error) { console.error('[OAuth] Apple signInWithIdToken error:', error.message); throw error; }
+
+  console.log('[OAuth] Apple done. user:', data.user?.email);
+  return data.user ? { user: data.user } : null;
 }

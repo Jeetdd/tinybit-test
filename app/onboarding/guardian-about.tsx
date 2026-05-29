@@ -37,6 +37,7 @@ export default function GuardianAboutScreen() {
   const { refreshProfile, user } = useAuth();
 
   const [email, setEmail] = useState(paramEmail);
+  const [age, setAge] = useState("");
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [selectedLang, setSelectedLang] = useState<LangOption>(
@@ -55,7 +56,7 @@ export default function GuardianAboutScreen() {
     });
   }, []);
 
-  const canNext = sex !== null;
+  const canNext = age.trim() !== "" && sex !== null;
 
   const handleCountrySelect = (c: Country) => {
     setCountry(c);
@@ -75,10 +76,16 @@ export default function GuardianAboutScreen() {
     // Dismiss keyboard to prevent layout shift during navigation
     Keyboard.dismiss();
 
+    const ageNum = parseInt(age, 10);
+    if (isNaN(ageNum) || ageNum < 1 || ageNum > 120) {
+      Alert.alert("Invalid Age", "Please enter a valid age between 1 and 120.");
+      return;
+    }
+
     setLoading(true);
     try {
       const fullName = buildFullName(firstName, lastName) || (name?.trim() ?? "");
-      
+
       if (user) {
         const { error } = await supabase.from("profiles").upsert({
           id: user.id,
@@ -86,6 +93,7 @@ export default function GuardianAboutScreen() {
           last_name: lastName.trim(),
           full_name: fullName,
           email: email.trim().toLowerCase(),
+          age: ageNum,
           country: country.name,
           country_code: country.code,
           preferred_language: selectedLang.appLang,
@@ -145,6 +153,20 @@ export default function GuardianAboutScreen() {
               autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
+            />
+          </View>
+
+          {/* Age */}
+          <Text style={[styles.fieldLabel, { marginTop: 20 }]}>How old are you?</Text>
+          <View style={styles.inputBox}>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 35"
+              placeholderTextColor="#B0BBC8"
+              keyboardType="number-pad"
+              maxLength={3}
+              value={age}
+              onChangeText={setAge}
             />
           </View>
 

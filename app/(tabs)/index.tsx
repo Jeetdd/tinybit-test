@@ -210,11 +210,13 @@ function ElderHomeScreen() {
     }
   }, [user]);
 
-  // Re-fetch medicines every time the tab comes into focus so deletions/additions
-  // made on the Medicine screen are immediately reflected here.
+  // Re-fetch medicines and mood every time the tab comes into focus.
   useFocusEffect(
     useCallback(() => {
-      if (user) fetchMedicines();
+      if (user) {
+        fetchMedicines();
+        fetchTodayMood();
+      }
     }, [user])
   );
 
@@ -250,16 +252,22 @@ function ElderHomeScreen() {
   };
 
   const fetchTodayMood = async () => {
+    const MOOD_LABEL: Record<string, string> = {
+      Great: 'Happy',
+      Good:  'Calm',
+      Okay:  'Tired',
+      Low:   'Low',
+    };
     try {
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
-        .from('daily_check_ins')
+        .from('moods')
         .select('mood')
         .eq('user_id', user?.id)
         .eq('date', today)
         .single();
       if (error && error.code !== 'PGRST116') throw error;
-      if (data?.mood) setTodayMood(data.mood);
+      if (data?.mood) setTodayMood(MOOD_LABEL[data.mood] ?? data.mood);
     } catch (err) {
       console.log('Error fetching today mood', err);
     }
@@ -556,33 +564,6 @@ function ElderHomeScreen() {
             )}
           </View>
 
-          {/* 3 — Sathi AI Card */}
-          <Animated.View entering={FadeInUp.delay(200)} style={[s.sathiCard, { marginHorizontal: 20, marginTop: 25, backgroundColor: themeColors.card }]}>
-            <View style={s.sathiMain}>
-              <View style={s.sathiInfo}>
-                <Text style={[s.sathiPrompt, { color: themeColors.muted }]}>How are you today,</Text>
-                <Text style={[s.sathiName, { color: themeColors.text }]} numberOfLines={1} ellipsizeMode="tail">
-                  {displayFirstName} ?
-                </Text>
-                <Pressable onPress={() => setShowSathiModal(true)} style={{ alignSelf: 'flex-start' }}>
-                  <LinearGradient
-                    colors={['#1A3558', '#2E6DA4']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={s.talkBtn}
-                  >
-                    <Ionicons name="chatbubble-ellipses" size={17} color="white" style={{ marginRight: 7 }} />
-                    <Text style={s.talkBtnText}>{ht.talkToSathi}</Text>
-                  </LinearGradient>
-                </Pressable>
-              </View>
-              <View style={s.mascotBg}>
-                <Text style={s.sparkle}>✦</Text>
-                <Image source={require('../../assets/images/homescreendrop.png')} style={s.mascotImg} resizeMode="contain" />
-              </View>
-            </View>
-          </Animated.View>
-
           {/* 4 — Voice Message from Family */}
           <View style={[s.sectionHeader, { marginTop: 25 }]}>
             <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.voiceMessageFrom}</Text>
@@ -627,9 +608,9 @@ function ElderHomeScreen() {
             <Text style={s.sectionActionMuted}>{new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
           </View>
           <View style={s.glanceRow}>
-            <GlanceCard title={ht.mood} color="#3FA4DA" img={require('../../assets/images/Mood.png')} value={todayMood} />
-            <GlanceCard title={ht.medicine} color="#4DB6AC" img={require('../../assets/images/Medicine.png')} value={`${takenCount}/${totalCount}`} />
-            <GlanceCard title={ht.streak} color="#FF8A65" img={require('../../assets/images/Streak.png')} value={streak.toString()} />
+            <GlanceCard title={ht.mood} color="#3FA4DA" img={require('../../assets/images/Mood.png')} value={todayMood} onPress={() => router.push('/mood-lift')} />
+            <GlanceCard title={ht.medicine} color="#4DB6AC" img={require('../../assets/images/Medicine.png')} value={`${takenCount}/${totalCount}`} onPress={() => router.push('/(tabs)/medicine')} />
+            <GlanceCard title={ht.streak} color="#FF8A65" img={require('../../assets/images/Streak.png')} value={streak.toString()} onPress={() => router.push('/streak' as any)} />
           </View>
 
           {/* 6 — What would you like? */}
@@ -764,11 +745,14 @@ function ElderHomeScreen() {
   );
 }
 
-function GlanceCard({ title, color, img, value }: any) {
+function GlanceCard({ title, color, img, value, onPress }: any) {
   const { fontScale, colors: tc } = useLanguage();
   const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
   return (
-    <View style={[s.glanceCard, { backgroundColor: tc.card }]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [s.glanceCard, { backgroundColor: tc.card, opacity: pressed ? 0.82 : 1 }]}
+    >
       <View style={[s.glanceBadge, { backgroundColor: color }]}>
         <Text style={s.glanceBadgeText}>{title}</Text>
       </View>
@@ -776,7 +760,7 @@ function GlanceCard({ title, color, img, value }: any) {
         <Image source={img} style={s.glanceImg} resizeMode="contain" />
         <Text style={[s.glanceValue, { color }]}>{value}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

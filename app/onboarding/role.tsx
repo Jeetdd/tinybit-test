@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Image, StatusBar, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Image, StatusBar, ImageBackground, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -161,8 +161,32 @@ export default function RoleSelection() {
       <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <View style={styles.footerContent}>
           <Text style={styles.footerText}>
-            Already have an account? <Text onPress={() => router.replace("/onboarding/login")} style={styles.signInText}>Sign In →</Text>
+            Already have an account?{' '}
+            <Text
+              onPress={() => router.replace('/onboarding/login')}
+              style={styles.signInText}
+            >
+              Sign In →
+            </Text>
           </Text>
+          <Pressable
+            onPress={() =>
+              Alert.alert('Sign Out', 'Sign out and return to login?', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Sign Out',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await supabase.auth.signOut();
+                    router.replace('/onboarding/login');
+                  },
+                },
+              ])
+            }
+            style={styles.signOutBtn}
+          >
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </Pressable>
         </View>
       </View>
     </View>
@@ -356,5 +380,15 @@ const styles = StyleSheet.create({
   signInText: {
     color: C.teal,
     fontWeight: '900',
+  },
+  signOutBtn: {
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  signOutText: {
+    color: '#FF6B6B',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

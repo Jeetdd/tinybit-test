@@ -62,6 +62,7 @@
         }
       ],
       "expo-web-browser",
+      "expo-apple-authentication",
       "expo-asset",
       [
         "expo-location",

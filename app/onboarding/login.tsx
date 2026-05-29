@@ -17,7 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../utils/supabase';
-import { signInWithGoogle } from '../../services/oauth';
+import { signInWithGoogle, signInWithApple } from '../../services/oauth';
+import { deriveNamesFromUser } from '../../utils/profileName';
 import CountryPickerModal from '../../components/CountryPickerModal';
 import { DEFAULT_COUNTRY, type Country } from '../../constants/countries';
 
@@ -47,13 +48,47 @@ export default function LoginScreen() {
     }
   };
 
+  const navigateAfterSocialAuth = async (signInResult: { user: import('@supabase/supabase-js').User } | null) => {
+    const session = (await supabase.auth.getSession()).data.session;
+    const authUser = signInResult?.user ?? session?.user ?? null;
+    if (!authUser) return;
+
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', authUser.id)
+      .single();
+
+    if (profileData?.role) {
+      router.replace('/(tabs)');
+      return;
+    }
+
+    const names = deriveNamesFromUser(authUser);
+    router.replace({
+      pathname: '/onboarding/role' as any,
+      params: { firstName: names.firstName, lastName: names.lastName, email: authUser.email ?? '' },
+    });
+  };
+
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithGoogle();
-      router.replace('/(tabs)');
+      const result = await signInWithGoogle();
+      await navigateAfterSocialAuth(result);
     } catch (err: any) {
       if (err.message !== 'The user canceled the sign-in flow.') {
         Alert.alert('Google Sign-In Error', err.message);
+      }
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    try {
+      const result = await signInWithApple();
+      await navigateAfterSocialAuth(result);
+    } catch (err: any) {
+      if (err.code !== 'ERR_REQUEST_CANCELED') {
+        Alert.alert('Apple Sign-In Error', err.message);
       }
     }
   };
@@ -86,16 +121,18 @@ export default function LoginScreen() {
           <Text style={s.subheading}>Continue with your account</Text>
 
           {/* Social buttons */}
-          <View style={s.socialRow}>
-            <Pressable style={s.socialBtn} onPress={handleGoogleSignIn}>
+          {/* Social buttons */}
+          <View style={s.socialColumn}>
+            <Pressable style={s.socialWideBtn} onPress={handleGoogleSignIn}>
               <Image source={{ uri: 'https://www.google.com/favicon.ico' }} style={s.socialLogo} />
+              <Text style={s.socialWideBtnText}>Continue with Google</Text>
             </Pressable>
-            <Pressable style={s.socialBtn}>
-              <Ionicons name="logo-facebook" size={26} color="#1877F2" />
-            </Pressable>
-            <Pressable style={s.socialBtn}>
-              <Ionicons name="logo-apple" size={26} color="#000" />
-            </Pressable>
+            {Platform.OS === 'ios' && (
+              <Pressable style={s.socialWideBtn} onPress={handleAppleSignIn}>
+                <Ionicons name="logo-apple" size={24} color="#000" />
+                <Text style={s.socialWideBtnText}>Continue with Apple</Text>
+              </Pressable>
+            )}
           </View>
 
           {/* Divider */}
@@ -183,6 +220,14 @@ const s = StyleSheet.create({
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
   },
   socialLogo: { width: 26, height: 26, resizeMode: 'contain' },
+  socialColumn: { gap: 12, marginBottom: 28 },
+  socialWideBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 12, height: 56, borderRadius: 18, backgroundColor: '#fff',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
+  },
+  socialWideBtnText: { fontSize: 16, fontWeight: '700', color: '#1A3050' },
 
   dividerRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#DDE3EC' },

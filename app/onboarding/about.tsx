@@ -27,6 +27,7 @@ import { buildFullName } from "../../utils/profileName";
 // ── Inline translations ──────────────────────────────────────────────────────
 type ScreenT = {
   title: string; subtitle: string;
+  age?: string;
   whereFrom: string; whichLang: string;
   bioSex: string; male: string; female: string;
   howTall: string; currentWeight: string;
@@ -45,6 +46,7 @@ const T: Record<Language, ScreenT> = {
   English: {
     title: "Tell Us About You",
     subtitle: "Your answers help us personalise your journey\nand create a better experience.",
+    age: "How old are you ?",
     whereFrom: "Where are you from ?",
     whichLang: "Which language do you prefer to speak in ?",
     bioSex: "What's your biological sex ?",
@@ -66,6 +68,7 @@ const T: Record<Language, ScreenT> = {
   "हिंदी": {
     title: "अपने बारे में बताएं",
     subtitle: "आपके उत्तर हमें आपकी यात्रा को बेहतर\nबनाने में मदद करते हैं।",
+    age: "आपकी उम्र क्या है?",
     whereFrom: "आप कहाँ से हैं?", whichLang: "आप किस भाषा में बात करना पसंद करते हैं?",
     bioSex: "आपका जैविक लिंग क्या है?", male: "पुरुष", female: "महिला",
     howTall: "आपकी लंबाई कितनी है?", currentWeight: "आपका वर्तमान वजन क्या है?",
@@ -84,6 +87,7 @@ const T: Record<Language, ScreenT> = {
   "ગુજરાતી": {
     title: "તમારા વિશે જણાવો",
     subtitle: "તમારા જવાબો અમને તમારી યાત્રાને\nવ્યક્તિગત બનાવવામાં મદદ કરે છે।",
+    age: "તમારી ઉંમર કેટલી છે?",
     whereFrom: "તમે ક્યાંથી છો?", whichLang: "તમે કઈ ભાષામાં વાત કરવાનું પસંદ કરો છો?",
     bioSex: "તમારું જૈવિક લિંગ શું છે?", male: "પુરુષ", female: "સ્ત્રી",
     howTall: "તમારી ઊંચાઈ કેટલી છે?", currentWeight: "તમારું હાલનું વજન શું છે?",
@@ -102,6 +106,7 @@ const T: Record<Language, ScreenT> = {
   "தமிழ்": {
     title: "உங்களைப் பற்றி சொல்லுங்கள்",
     subtitle: "உங்கள் பதில்கள் உங்கள் பயணத்தை\nதனிப்பயனாக்க உதவுகின்றன.",
+    age: "உங்கள் வயது என்ன?",
     whereFrom: "நீங்கள் எங்கிருந்து வருகிறீர்கள்?", whichLang: "நீங்கள் எந்த மொழியில் பேச விரும்புகிறீர்கள்?",
     bioSex: "உங்கள் உயிரியல் பாலினம் என்ன?", male: "ஆண்", female: "பெண்",
     howTall: "நீங்கள் எவ்வளவு உயரம்?", currentWeight: "உங்கள் தற்போதைய எடை என்ன?",
@@ -120,6 +125,7 @@ const T: Record<Language, ScreenT> = {
   "বাংলা": {
     title: "আপনার সম্পর্কে বলুন",
     subtitle: "আপনার উত্তরগুলি আমাদের আপনার যাত্রা\nব্যক্তিগতকৃত করতে সাহায্য করে।",
+    age: "আপনার বয়স কত?",
     whereFrom: "আপনি কোথা থেকে এসেছেন?", whichLang: "আপনি কোন ভাষায় কথা বলতে পছন্দ করেন?",
     bioSex: "আপনার জৈবিক লিঙ্গ কী?", male: "পুরুষ", female: "মহিলা",
     howTall: "আপনি কতটা লম্বা?", currentWeight: "আপনার বর্তমান ওজন কত?",
@@ -138,6 +144,7 @@ const T: Record<Language, ScreenT> = {
   "मराठी": {
     title: "तुमच्याबद्दल सांगा",
     subtitle: "तुमच्या उत्तरांमुळे आम्हाला तुमचा प्रवास\nवैयक्तिकृत करण्यात मदत होते.",
+    age: "तुमचे वय किती आहे?",
     whereFrom: "तुम्ही कुठून आहात?", whichLang: "तुम्हाला कोणत्या भाषेत बोलणे आवडते?",
     bioSex: "तुमचे जैविक लिंग काय आहे?", male: "पुरुष", female: "महिला",
     howTall: "तुमची उंची किती आहे?", currentWeight: "तुमचे सध्याचे वजन काय आहे?",
@@ -551,6 +558,7 @@ export default function AboutScreen() {
   const t = T[language] ?? T.English;
 
   const [email,             setEmail]             = useState(paramEmail);
+  const [age,               setAge]               = useState("");
   const [country,           setCountry]           = useState<Country>(DEFAULT_COUNTRY);
   const [pickerVisible,     setPickerVisible]      = useState(false);
   const [emergencyCountry,  setEmergencyCountry]   = useState<Country>(DEFAULT_COUNTRY);
@@ -609,7 +617,7 @@ export default function AboutScreen() {
     setLanguage(lang.appLang);
   };
 
-  const canNext = email.trim() !== "" && sex !== null && height.trim() !== "" && weight.trim() !== "" && emergencyPhone.trim() !== "" && emergencyRelation !== "";
+  const canNext = email.trim() !== "" && age.trim() !== "" && sex !== null && height.trim() !== "" && weight.trim() !== "" && emergencyPhone.trim() !== "" && emergencyRelation !== "";
 
   const handleNext = async () => {
     if (!canNext) return;
@@ -620,6 +628,12 @@ export default function AboutScreen() {
     const emailTrimmed = email.trim();
     if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
       Alert.alert("Invalid Email", "Please enter a valid email address.");
+      return;
+    }
+
+    const ageNum = parseInt(age, 10);
+    if (isNaN(ageNum) || ageNum < 1 || ageNum > 120) {
+      Alert.alert("Invalid Age", "Please enter a valid age between 1 and 120.");
       return;
     }
 
@@ -658,6 +672,7 @@ export default function AboutScreen() {
           last_name:          lastName.trim(),
           full_name:          fullName,
           email:              email.trim().toLowerCase(),
+          age:                ageNum,
           country:            country.name,
           country_code:       country.code,
           preferred_language: selectedLang.appLang,
@@ -721,6 +736,20 @@ export default function AboutScreen() {
               autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
+            />
+          </View>
+
+          {/* ── Age ── */}
+          <Text style={[styles.fieldLabel, { marginTop: 20 }]}>{t.age ?? "How old are you ?"}</Text>
+          <View style={styles.inputBox}>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 65"
+              placeholderTextColor="#B0BBC8"
+              keyboardType="number-pad"
+              maxLength={3}
+              value={age}
+              onChangeText={setAge}
             />
           </View>
 

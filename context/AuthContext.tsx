@@ -69,9 +69,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [streak, setStreak] = useState(1);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       Logger.auth(TAG, 'AuthStateChange', { event, userId: session?.user?.id });
-      
+
       // Only clear the user on an explicit sign-out — never on TOKEN_REFRESHED,
       // USER_UPDATED, or any transient null-session event. On Android, token
       // refresh fires a brief null session which would otherwise redirect to
@@ -87,15 +87,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.user) {
         setUser(session.user);
         // Only fetch the profile on initial load or explicit sign-in.
+        // IMPORTANT: do NOT await fetchProfile here. The Supabase SDK awaits
+        // every onAuthStateChange callback before resolving exchangeCodeForSession.
+        // If fetchProfile awaits a DB query while the SDK holds the auth lock
+        // (inside exchangeCodeForSession), it deadlocks. Fire-and-forget lets the
+        // callback return immediately so the SDK can release the lock, and
+        // fetchProfile's query succeeds once the lock is free.
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
           Logger.auth(TAG, 'Fetching profile', { event });
-          await fetchProfile(session.user);
+          fetchProfile(session.user);
         }
       } else if (event === 'INITIAL_SESSION') {
         Logger.auth(TAG, 'No session on INITIAL_SESSION');
         setUser(null);
       }
-      
+
       if (event === 'INITIAL_SESSION') {
         setIsLoading(false);
       }
@@ -153,11 +159,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Sync fields that are available from Auth but missing in DB
       const authPhone = authUser.phone ?? null;
+      const authAvatar =
+        authUser.user_metadata?.avatar_url ||
+        authUser.user_metadata?.picture ||
+        null;
       const needsSync: Record<string, string> = {};
-      if (!data?.first_name && firstName)  needsSync.first_name = firstName;
-      if (!data?.last_name  && lastName)   needsSync.last_name  = lastName;
-      if (!data?.full_name  && fullName)   needsSync.full_name  = fullName;
-      if (!data?.mobile     && authPhone)  needsSync.mobile     = authPhone;
+      if (!data?.first_name  && firstName)   needsSync.first_name   = firstName;
+      if (!data?.last_name   && lastName)    needsSync.last_name    = lastName;
+      if (!data?.full_name   && fullName)    needsSync.full_name    = fullName;
+      if (!data?.mobile      && authPhone)   needsSync.mobile       = authPhone;
+      if (!data?.profile_image && authAvatar) needsSync.profile_image = authAvatar;
       if (Object.keys(needsSync).length > 0) {
         await supabase.from('profiles').update(needsSync).eq('id', authUser.id);
       }
@@ -191,7 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         medications:        data?.medications ?? [],
         doctorName:         data?.doctor_name,
         doctorContact:      data?.doctor_contact,
-        avatar_url:         data?.profile_image,
+        avatar_url:         data?.profile_image || authAvatar || undefined,
       });
 
       const userPlan = await fetchUserPlan(authUser.id);
@@ -234,19 +245,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user?.id]);
 
   const loadStreak = async () => {
+    const PENALTY_PER_DAY = 5; // points lost per missed day
     const storedStreak = await AsyncStorage.getItem('userStreak');
-    const lastOpen = await AsyncStorage.getItem('lastOpenDate');
-    const today = new Date().toDateString();
+    const lastOpen     = await AsyncStorage.getItem('lastOpenDate');
+    const today        = new Date().toDateString();
 
     if (storedStreak && lastOpen) {
       if (lastOpen === today) {
         setStreak(parseInt(storedStreak, 10));
       } else {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const newStreak = lastOpen === yesterday.toDateString()
-          ? parseInt(storedStreak, 10) + 1
-          : 1;
+        const daysAgo = Math.round(
+          (new Date(today).getTime() - new Date(lastOpen).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        let newStreak: number;
+        if (daysAgo === 1) {
+          // Opened yesterday — perfect consecutive day
+          newStreak = parseInt(storedStreak, 10) + 1;
+        } else {
+          // Missed (daysAgo - 1) days — apply penalty
+          const daysMissed = daysAgo - 1;
+          newStreak = Math.max(0, parseInt(storedStreak, 10) - daysMissed * PENALTY_PER_DAY);
+        }
         setStreak(newStreak);
         await AsyncStorage.setItem('userStreak', newStreak.toString());
       }

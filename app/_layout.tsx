@@ -21,9 +21,11 @@ import { deriveNamesFromUser } from '../utils/profileName';
 import { registerPushToken } from '../services/pushNotifications';
 
 
-// Onboarding screens that are safe to remain on while profile is being built
+// Screens where the routing guard should NOT fire an automatic redirect.
+// 'login' and 'signup' are intentionally excluded: authenticated users
+// (e.g. after social OAuth) must be redirected away from those screens.
 const PROFILE_SETUP_SCREENS = new Set([
-  'role', 'name', 'about', 'guardian-about', 'add-parent', 'medical', 'otp', 'step1', 'register', 'login', 'signup'
+  'role', 'name', 'about', 'guardian-about', 'add-parent', 'medical', 'otp', 'step1', 'register',
 ]);
 
 async function setupAudio() {
@@ -189,6 +191,7 @@ function RootLayoutNav() {
         <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
         <Stack.Screen name="memory-history" options={{ headerShown: false }} />
         <Stack.Screen name="mood-lift" options={{ headerShown: false }} />
+        <Stack.Screen name="streak" options={{ headerShown: false }} />
         <Stack.Screen name="mood-library" options={{ headerShown: false }} />
         {/* New feature screens */}
         <Stack.Screen name="weather" options={{ headerShown: false }} />

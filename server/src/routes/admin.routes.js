@@ -1,49 +1,67 @@
 const express = require('express');
+const path = require('path');
 const router = express.Router();
+
 const {
+  checkSession,
+  login, logout,
   serveDashboard,
-  getStats,
-  getUsers,
-  getConnections,
-  banUser,
-  deleteConnection,
+  getStats, getAnalytics,
+  getUsers, banUser, deleteUser,
+  getConnections, deleteConnection,
+  getMedicines,
+  getCheckIns,
+  getMoods,
+  getAIConversations,
+  getCareEvents,
+  getMindGames,
+  broadcast,
 } = require('../controllers/admin.controller');
 
-// Simple API-key auth for all /admin/api/* endpoints
-const adminAuth = (req, res, next) => {
-  // Dashboard HTML — use HTTP Basic Auth
-  if (req.path === '/') return next();
+// Serve admin panel assets (CSS, JS if ever split out)
+router.use('/assets', express.static(path.join(__dirname, '../../public/admin')));
 
-  const key = req.headers['x-admin-key'] ?? req.query.key;
-  if (!key || key !== process.env.ADMIN_API_KEY) {
+// Session auth middleware — applied to all /api/* routes except /api/login
+const sessionAuth = (req, res, next) => {
+  const auth = req.headers.authorization ?? '';
+  if (!auth.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  return next();
-};
-
-// Basic Auth for the dashboard page
-const basicAuth = (req, res, next) => {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Basic ')) {
-    res.set('WWW-Authenticate', 'Basic realm="TinyBit Admin"');
-    return res.status(401).send('Authentication required');
-  }
-  const [user, pass] = Buffer.from(auth.slice(6), 'base64').toString().split(':');
-  if (
-    user !== (process.env.ADMIN_USERNAME ?? 'admin') ||
-    pass !== (process.env.ADMIN_PASSWORD ?? 'tinybit2025')
-  ) {
-    res.set('WWW-Authenticate', 'Basic realm="TinyBit Admin"');
-    return res.status(401).send('Invalid credentials');
+  if (!checkSession(auth.slice(7))) {
+    return res.status(401).json({ error: 'Session expired. Please log in again.' });
   }
   return next();
 };
 
-router.get('/',                   basicAuth, serveDashboard);
-router.get('/api/stats',          adminAuth, getStats);
-router.get('/api/users',          adminAuth, getUsers);
-router.get('/api/connections',    adminAuth, getConnections);
-router.patch('/api/users/:id/ban',    adminAuth, banUser);
-router.delete('/api/connections/:id', adminAuth, deleteConnection);
+// ── Dashboard page ────────────────────────────────────────────────────────────
+router.get('/', serveDashboard);
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+router.post('/api/login',  login);
+router.post('/api/logout', sessionAuth, logout);
+
+// ── Stats & analytics ─────────────────────────────────────────────────────────
+router.get('/api/stats',     sessionAuth, getStats);
+router.get('/api/analytics', sessionAuth, getAnalytics);
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+router.get('/api/users',             sessionAuth, getUsers);
+router.patch('/api/users/:id/ban',   sessionAuth, banUser);
+router.delete('/api/users/:id',      sessionAuth, deleteUser);
+
+// ── Connections ───────────────────────────────────────────────────────────────
+router.get('/api/connections',           sessionAuth, getConnections);
+router.delete('/api/connections/:id',    sessionAuth, deleteConnection);
+
+// ── App data ──────────────────────────────────────────────────────────────────
+router.get('/api/medicines',        sessionAuth, getMedicines);
+router.get('/api/check-ins',        sessionAuth, getCheckIns);
+router.get('/api/moods',            sessionAuth, getMoods);
+router.get('/api/ai-conversations', sessionAuth, getAIConversations);
+router.get('/api/care-events',      sessionAuth, getCareEvents);
+router.get('/api/mind-games',       sessionAuth, getMindGames);
+
+// ── Broadcast ─────────────────────────────────────────────────────────────────
+router.post('/api/broadcast', sessionAuth, broadcast);
 
 module.exports = router;

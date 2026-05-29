@@ -115,38 +115,56 @@ export default function MoodLiftScreen() {
   const t = tr(language);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [savedMood,    setSavedMood]    = useState<string | null>(null);
-  const [showHappyModal, setShowHappyModal] = useState(false);
-  const [happyNote, setHappyNote] = useState("");
-  const [savingNote, setSavingNote] = useState(false);
+  const [savingMood,   setSavingMood]   = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [moodNote,    setMoodNote]    = useState("");
+  const [savingNote,  setSavingNote]  = useState(false);
+
+  // Mood-specific modal copy
+  const MOOD_MODAL: Record<string, { emoji: string; title: string; placeholder: string }> = {
+    Happy: { emoji: '😊', title: t.whatMakesYouHappy,    placeholder: t.typeHere },
+    Tired: { emoji: '😴', title: "What's making you tired?",       placeholder: "Describe what drained you..." },
+    Low:   { emoji: '💙', title: "Want to share what's on your mind?", placeholder: "It's okay to let it out..." },
+    calm:  { emoji: '😌', title: "What's keeping you calm today?", placeholder: "Share your peaceful moment..." },
+  };
 
   const handleMoodSelect = async (label: string) => {
+    if (savingMood) return;
     setSelectedMood(label);
     setSavedMood(null);
     if (!user) return;
     const m = MOOD_DB[label];
     if (!m) return;
-    const today = new Date().toISOString().split('T')[0];
-    const { error } = await supabase.from('moods').upsert(
-      { user_id: user.id, mood: m.mood, mood_score: m.score, date: today },
-      { onConflict: 'user_id,date' }
-    );
-    if (!error) {
+
+    setSavingMood(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const { error } = await supabase.from('moods').upsert(
+        { user_id: user.id, mood: m.mood, mood_score: m.score, date: today },
+        { onConflict: 'user_id,date' }
+      );
+      if (error) throw error;
       setSavedMood(label);
-      if (label === 'Happy') setShowHappyModal(true);
+      setMoodNote("");
+      setShowNoteModal(true);
+    } catch (e: any) {
+      Alert.alert("Couldn't save mood", e.message);
+    } finally {
+      setSavingMood(false);
     }
   };
 
-  const saveHappyNote = async () => {
-    if (!happyNote.trim() || !user) return;
+  const saveMoodNote = async () => {
+    if (!moodNote.trim() || !user) return;
     setSavingNote(true);
     try {
       const today = new Date().toISOString().split('T')[0];
       await supabase.from('moods').upsert(
-        { user_id: user.id, date: today, note: happyNote.trim() },
+        { user_id: user.id, date: today, note: moodNote.trim() },
         { onConflict: 'user_id,date' }
       );
-      setShowHappyModal(false);
-      setHappyNote("");
+      setShowNoteModal(false);
+      setMoodNote("");
     } catch (e: any) {
       Alert.alert("Error", e.message);
     } finally {
@@ -209,23 +227,40 @@ export default function MoodLiftScreen() {
         </View>
 
         <Animated.View entering={FadeInDown.delay(140)} style={[s.moodRow, { paddingHorizontal: hPad, gap }]}>
-          {MOODS.map(m => (
-            <Pressable
-              key={m.label}
-              onPress={() => handleMoodSelect(m.label)}
-              style={[s.moodCard, { width: moodW }, selectedMood === m.label && s.moodCardActive]}
-            >
-              <View style={[s.moodBadge, { backgroundColor: m.badge }]}>
-                <Text style={s.moodBadgeText}>{m.label}</Text>
-              </View>
-              <View style={s.moodEmojiWrap}>
-                <Image source={m.image} style={s.moodImg} resizeMode="contain" />
-              </View>
-            </Pressable>
-          ))}
+          {MOODS.map(m => {
+            const isSelected = selectedMood === m.label;
+            const isSaved    = savedMood === m.label;
+            const isLoading  = savingMood && isSelected;
+            return (
+              <Pressable
+                key={m.label}
+                onPress={() => handleMoodSelect(m.label)}
+                disabled={savingMood}
+                style={[
+                  s.moodCard, { width: moodW },
+                  isSelected && s.moodCardActive,
+                  isSaved    && { borderColor: '#16A34A' },
+                ]}
+              >
+                {isSaved && (
+                  <View style={s.savedTick}>
+                    <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
+                  </View>
+                )}
+                <View style={[s.moodBadge, { backgroundColor: isLoading ? '#ccc' : m.badge }]}>
+                  <Text style={s.moodBadgeText}>
+                    {isLoading ? '...' : m.label}
+                  </Text>
+                </View>
+                <View style={[s.moodEmojiWrap, isLoading && { opacity: 0.4 }]}>
+                  <Image source={m.image} style={s.moodImg} resizeMode="contain" />
+                </View>
+              </Pressable>
+            );
+          })}
         </Animated.View>
         {savedMood && (
-          <Text style={s.savedHint}>Mood saved ✓</Text>
+          <Text style={s.savedHint}>✓ Mood logged for today</Text>
         )}
 
         {/* ── Mood Suggestions ── */}
@@ -294,34 +329,43 @@ export default function MoodLiftScreen() {
         ))}
       </ScrollView>
 
-      {/* ── Happy follow-up modal ── */}
-      <Modal visible={showHappyModal} transparent animationType="slide">
+      {/* ── Mood note modal (all moods) ── */}
+      <Modal visible={showNoteModal} transparent animationType="slide">
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <View style={s.modalOverlay}>
             <View style={s.modalCard}>
-              <Text style={s.modalTitle}>😊 {t.whatMakesYouHappy}</Text>
-              <Text style={s.modalSub}>{t.shareHappyThought}</Text>
-              <TextInput
-                style={s.modalInput}
-                placeholder={t.typeHere}
-                placeholderTextColor={C.muted}
-                value={happyNote}
-                onChangeText={setHappyNote}
-                multiline
-                autoFocus
-              />
-              <View style={s.modalBtns}>
-                <TouchableOpacity style={s.modalSkip} onPress={() => { setShowHappyModal(false); setHappyNote(""); }}>
-                  <Text style={s.modalSkipText}>{t.skipForNow}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.modalSave, (!happyNote.trim() || savingNote) && { opacity: 0.5 }]}
-                  onPress={saveHappyNote}
-                  disabled={!happyNote.trim() || savingNote}
-                >
-                  <Text style={s.modalSaveText}>{savingNote ? t.saving : t.save}</Text>
-                </TouchableOpacity>
-              </View>
+              {savedMood && MOOD_MODAL[savedMood] ? (
+                <>
+                  <Text style={s.modalTitle}>
+                    {MOOD_MODAL[savedMood].emoji}  {MOOD_MODAL[savedMood].title}
+                  </Text>
+                  <Text style={s.modalSub}>{t.shareHappyThought}</Text>
+                  <TextInput
+                    style={s.modalInput}
+                    placeholder={MOOD_MODAL[savedMood].placeholder}
+                    placeholderTextColor={C.muted}
+                    value={moodNote}
+                    onChangeText={setMoodNote}
+                    multiline
+                    autoFocus
+                  />
+                  <View style={s.modalBtns}>
+                    <TouchableOpacity
+                      style={s.modalSkip}
+                      onPress={() => { setShowNoteModal(false); setMoodNote(""); }}
+                    >
+                      <Text style={s.modalSkipText}>{t.skipForNow}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[s.modalSave, (!moodNote.trim() || savingNote) && { opacity: 0.5 }]}
+                      onPress={saveMoodNote}
+                      disabled={!moodNote.trim() || savingNote}
+                    >
+                      <Text style={s.modalSaveText}>{savingNote ? t.saving : t.save}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : null}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -384,6 +428,7 @@ const s = StyleSheet.create({
   moodImg: { width: 54, height: 54 },
 
   savedHint: { textAlign: 'center', fontSize: 13, fontWeight: '700', color: '#16A34A', marginTop: 6, marginBottom: 4 },
+  savedTick: { position: 'absolute', top: 6, right: 6, zIndex: 1 },
 
   // Suggestions
   suggestCard: {
