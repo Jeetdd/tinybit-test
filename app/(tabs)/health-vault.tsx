@@ -311,20 +311,56 @@ export default function HealthVaultScreen() {
       const storagePath = `${targetUserId}/${Date.now()}_${safeName}`;
       const mimeType = file.mimeType ?? 'application/octet-stream';
 
-      const response = await fetch(file.uri);
-      const blob = await response.blob();
+      // Read file content. fetch() on Android content:// URIs can silently return
+      // an empty blob, so we verify size and fall back to FileSystem if needed.
+      let uploadContent: Blob | Uint8Array | null = null;
 
-      const { error: uploadError } = await supabase.storage
-        .from('health-records')
-        .upload(storagePath, blob, { contentType: mimeType, upsert: false });
+      try {
+        const fetchResp = await fetch(file.uri);
+        const tentBlob  = await fetchResp.blob();
+        if (tentBlob && tentBlob.size > 0) uploadContent = tentBlob;
+      } catch { /* try FileSystem below */ }
 
-      if (uploadError) {
-        console.warn('[Health Vault] Supabase upload failed:', uploadError.message);
+      if (!uploadContent) {
+        // Fallback: FileSystem is reliable for content:// and file:// URIs
+        const b64: any = await (FileSystem as any)
+          .readAsStringAsync(file.uri, { encoding: 'base64' })
+          .catch(() => null);
+        if (typeof b64 === 'string' && b64.length > 0) {
+          // Pure-JS base64 → Uint8Array (avoids atob null-byte truncation)
+          const B64M = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+          const lut  = new Uint8Array(256);
+          for (let i = 0; i < B64M.length; i++) lut[B64M.charCodeAt(i)] = i;
+          const clean  = b64.replace(/[^A-Za-z0-9+/]/g, '');
+          const outLen = Math.floor(clean.length * 3 / 4);
+          const bytes  = new Uint8Array(outLen);
+          let out = 0;
+          for (let i = 0; i < clean.length; i += 4) {
+            const a = lut[clean.charCodeAt(i)],     bv = lut[clean.charCodeAt(i + 1)];
+            const c = lut[clean.charCodeAt(i + 2)], d  = lut[clean.charCodeAt(i + 3)];
+            bytes[out++] = (a << 2) | (bv >> 4);
+            if (out < outLen) bytes[out++] = ((bv & 15) << 4) | (c >> 2);
+            if (out < outLen) bytes[out++] = ((c & 3) << 6) | d;
+          }
+          uploadContent = bytes;
+        }
+      }
+
+      if (!uploadContent) {
+        console.warn('[Health Vault] Could not read file — storing local URI');
       } else {
-        const { data: urlData } = supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('health-records')
-          .getPublicUrl(storagePath);
-        storageUri = urlData.publicUrl;
+          .upload(storagePath, uploadContent, { contentType: mimeType, upsert: false });
+
+        if (uploadError) {
+          console.warn('[Health Vault] Supabase upload failed:', uploadError.message);
+        } else {
+          const { data: urlData } = supabase.storage
+            .from('health-records')
+            .getPublicUrl(storagePath);
+          storageUri = urlData.publicUrl;
+        }
       }
     } catch (uploadErr: any) {
       console.warn('[Health Vault] Storage upload exception:', uploadErr?.message);
@@ -584,7 +620,7 @@ export default function HealthVaultScreen() {
         }
         const arrayBuffer = await dlResp.arrayBuffer();
         if (!arrayBuffer || arrayBuffer.byteLength < 10) {
-          throw new Error(`Downloaded file appears empty (${arrayBuffer?.byteLength ?? 0} bytes). Try re-uploading the record.`);
+          throw new Error(`The file stored in cloud is empty (0 bytes) — this happens when the upload used an Android content:// URI that returned no data.\n\nPlease delete this record and re-upload the PDF to fix it.`);
         }
         // Pure-JS base64 encoding — handles all byte values including null bytes
         const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
