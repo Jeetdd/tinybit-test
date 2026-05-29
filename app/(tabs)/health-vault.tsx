@@ -566,16 +566,31 @@ export default function HealthVaultScreen() {
       const token = await getToken();
       if (!token) { setForecastLoading(false); return; }
 
-      // Read the file as base64, handling both remote URLs and local device URIs.
-      let base64: string;
+      // Read the file as base64.
+      // Remote URLs: fetch → ArrayBuffer → btoa (no file-system dependency, works reliably).
+      // Local device URIs: use expo-file-system/legacy readAsStringAsync.
+      let base64 = '';
       const isRemote = r.uri.startsWith('http://') || r.uri.startsWith('https://');
       if (isRemote) {
-        const ext = r.mime_type?.includes('pdf') ? '.pdf' : '.jpg';
-        const cacheUri = FileSystem.cacheDirectory + `forecast_${r.id}${ext}`;
-        const { uri: localUri } = await (FileSystem as any).downloadAsync(r.uri, cacheUri);
-        base64 = await (FileSystem as any).readAsStringAsync(localUri, { encoding: 'base64' });
+        const dlResp = await fetch(r.uri);
+        if (!dlResp.ok) throw new Error(`Could not download the document (HTTP ${dlResp.status}). Try uploading again.`);
+        const buffer = await dlResp.arrayBuffer();
+        const bytes  = new Uint8Array(buffer);
+        // Build binary string in chunks to avoid call-stack overflow on large files
+        const CHUNK  = 4096;
+        let binary   = '';
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+        }
+        base64 = btoa(binary);
       } else {
         base64 = await (FileSystem as any).readAsStringAsync(r.uri, { encoding: 'base64' });
+      }
+
+      if (!base64 || base64.length < 100) {
+        Alert.alert("Read Error", "Could not read the file content. Try uploading this record again.");
+        setForecastModal(false);
+        return;
       }
 
       const res = await fetch(`${API_BASE_URL}/ai/health-forecast`, {

@@ -628,7 +628,7 @@ const healthForecast = async (req, res) => {
             ],
           }],
           generationConfig: { maxOutputTokens: 1200, temperature: 0.2 },
-        }, 35_000);
+        }, 60_000);   // large PDFs need up to ~45 s
 
         if (geminiResp.ok) {
           const json    = await geminiResp.json();
