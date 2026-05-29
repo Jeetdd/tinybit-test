@@ -600,31 +600,13 @@ const FORECAST_FALLBACK = {
 
 const healthForecast = async (req, res) => {
   try {
-    const { base64: rawBase64, uri, mimeType, category, title } = req.body || {};
-
-    let base64   = rawBase64;
-    let safeMime = mimeType?.trim() || 'image/jpeg';
-
-    // If a Supabase public URL was supplied instead of base64, fetch it server-side.
-    // This avoids the phone having to download + upload a large file.
-    if (!base64 && uri) {
-      try {
-        const fileResp = await fetch(uri, { signal: AbortSignal.timeout(25_000) });
-        if (!fileResp.ok) {
-          return res.status(400).json({ success: false, message: 'Could not fetch the document from storage.' });
-        }
-        const arrayBuf = await fileResp.arrayBuffer();
-        base64 = Buffer.from(arrayBuf).toString('base64');
-        if (!mimeType && /\.pdf(\?|$)/i.test(uri)) safeMime = 'application/pdf';
-      } catch (fetchErr) {
-        return res.status(400).json({ success: false, message: 'Failed to retrieve the document. Please try again.' });
-      }
-    }
+    const { base64, mimeType, category, title } = req.body || {};
 
     if (typeof base64 !== 'string' || base64.length < 100) {
-      return res.status(400).json({ success: false, message: '`base64` or `uri` is required' });
+      return res.status(400).json({ success: false, message: 'base64 document content is required' });
     }
 
+    const safeMime = mimeType?.trim() || 'image/jpeg';
     const isImage  = safeMime.startsWith('image/');
     // Gemini supports both images and PDFs via inlineData
     const geminiSupported = isImage || safeMime === 'application/pdf';

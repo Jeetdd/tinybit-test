@@ -566,13 +566,23 @@ export default function HealthVaultScreen() {
       const token = await getToken();
       if (!token) { setForecastLoading(false); return; }
 
-      // Send the Supabase public URL — backend fetches and converts to base64 server-side.
-      // This avoids downloading the file to the device (which can be large PDFs).
+      // Read the file as base64, handling both remote URLs and local device URIs.
+      let base64: string;
+      const isRemote = r.uri.startsWith('http://') || r.uri.startsWith('https://');
+      if (isRemote) {
+        const ext = r.mime_type?.includes('pdf') ? '.pdf' : '.jpg';
+        const cacheUri = FileSystem.cacheDirectory + `forecast_${r.id}${ext}`;
+        const { uri: localUri } = await (FileSystem as any).downloadAsync(r.uri, cacheUri);
+        base64 = await (FileSystem as any).readAsStringAsync(localUri, { encoding: 'base64' });
+      } else {
+        base64 = await (FileSystem as any).readAsStringAsync(r.uri, { encoding: 'base64' });
+      }
+
       const res = await fetch(`${API_BASE_URL}/ai/health-forecast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          uri:      r.uri,
+          base64,
           mimeType: r.mime_type ?? 'image/jpeg',
           category: r.category,
           title:    r.title,
