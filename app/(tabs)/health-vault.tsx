@@ -569,25 +569,41 @@ export default function HealthVaultScreen() {
       if (!token) { setForecastLoading(false); return; }
 
       // Read the file as base64.
-      // Remote (Supabase) URLs: fetch → blob → FileReader.readAsDataURL
-      //   (FileReader handles null bytes correctly; btoa can silently truncate binary PDFs)
-      // Local device URIs: expo-file-system/legacy, with a clear error if the temp path expired.
+      // Remote (Supabase) URLs: fetch → arrayBuffer → pure-JS base64 encoder.
+      //   - Avoids btoa() which truncates on null bytes in PDFs.
+      //   - Avoids FileReader.readAsDataURL() which in React Native returns a
+      //     "blob:" URL instead of a real data URL, making split(',')[1] undefined.
+      // Local device URIs: expo-file-system/legacy readAsStringAsync.
       let base64 = '';
       const isRemote = r.uri.startsWith('http://') || r.uri.startsWith('https://');
 
       if (isRemote) {
         const dlResp = await fetch(r.uri);
-        if (!dlResp.ok) throw new Error(`Could not download the document (HTTP ${dlResp.status}). Try uploading again.`);
-        const blob = await dlResp.blob();
-        base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const dataUrl = reader.result as string;
-            resolve(dataUrl?.split(',')[1] ?? '');
-          };
-          reader.onerror = () => reject(new Error('Could not read the file. Please try again.'));
-          reader.readAsDataURL(blob);
-        });
+        if (!dlResp.ok) {
+          throw new Error(`Could not access the file (HTTP ${dlResp.status}). Ensure migration 047 has been applied in Supabase.`);
+        }
+        const arrayBuffer = await dlResp.arrayBuffer();
+        if (!arrayBuffer || arrayBuffer.byteLength < 10) {
+          throw new Error(`Downloaded file appears empty (${arrayBuffer?.byteLength ?? 0} bytes). Try re-uploading the record.`);
+        }
+        // Pure-JS base64 encoding — handles all byte values including null bytes
+        const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        const src  = new Uint8Array(arrayBuffer);
+        const n    = src.length;
+        const out: string[] = [];
+        for (let i = 0; i < n; i += 3072) {
+          let s = '';
+          const end = Math.min(i + 3072, n);
+          for (let j = i; j < end; j += 3) {
+            const a = src[j], b = src[j + 1] ?? 0, c = src[j + 2] ?? 0;
+            s += B64[a >> 2] +
+                 B64[((a & 3) << 4) | (b >> 4)] +
+                 (j + 1 < n ? B64[((b & 15) << 2) | (c >> 6)] : '=') +
+                 (j + 2 < n ? B64[c & 63] : '=');
+          }
+          out.push(s);
+        }
+        base64 = out.join('');
       } else {
         // Local device path — might be a stale DocumentPicker temp URI
         try {
@@ -599,7 +615,7 @@ export default function HealthVaultScreen() {
         if (!base64 || base64.length < 100) {
           Alert.alert(
             "File Not Accessible",
-            "This record's file is stored only on your device and can no longer be read (the temporary access has expired).\n\nPlease delete this record and upload the file again to enable AI analysis.",
+            "This record is stored locally on your device and can no longer be read (temporary access expired).\n\nPlease delete this record and re-upload the file.",
           );
           setForecastModal(false);
           return;
@@ -607,9 +623,7 @@ export default function HealthVaultScreen() {
       }
 
       if (!base64 || base64.length < 100) {
-        Alert.alert("Read Error", "Could not read the file content. Try uploading this record again.");
-        setForecastModal(false);
-        return;
+        throw new Error('File content could not be read. Please re-upload this record.');
       }
 
       const res = await fetch(`${API_BASE_URL}/ai/health-forecast`, {
