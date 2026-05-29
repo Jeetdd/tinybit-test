@@ -89,7 +89,7 @@ type ForecastResult = {
   followUp: string;
 };
 
-type FileInfo = { uri: string; name: string; size?: number; mimeType?: string };
+type FileInfo = { uri: string; name: string; size?: number; mimeType?: string; base64?: string };
 
 const CATEGORIES = ["Reports", "Prescriptions", "X-Rays"] as const;
 type Category = typeof CATEGORIES[number];
@@ -311,38 +311,48 @@ export default function HealthVaultScreen() {
       const storagePath = `${targetUserId}/${Date.now()}_${safeName}`;
       const mimeType = file.mimeType ?? 'application/octet-stream';
 
-      // Read file content. fetch() on Android content:// URIs can silently return
-      // an empty blob, so we verify size and fall back to FileSystem if needed.
+      // Build upload content.
+      // Priority 1: caller already read the file as base64 (AI analysis step) — reuse it.
+      // Priority 2: fetch() for remote/HTTP URIs.
+      // Priority 3: FileSystem for local URIs (content://, file://).
       let uploadContent: Blob | Uint8Array | null = null;
 
-      try {
-        const fetchResp = await fetch(file.uri);
-        const tentBlob  = await fetchResp.blob();
-        if (tentBlob && tentBlob.size > 0) uploadContent = tentBlob;
-      } catch { /* try FileSystem below */ }
+      const decodeB64ToUint8 = (b64: string): Uint8Array => {
+        const B64M = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        const lut  = new Uint8Array(256);
+        for (let i = 0; i < B64M.length; i++) lut[B64M.charCodeAt(i)] = i;
+        const clean  = b64.replace(/[^A-Za-z0-9+/]/g, '');
+        const outLen = Math.floor(clean.length * 3 / 4);
+        const bytes  = new Uint8Array(outLen);
+        let out = 0;
+        for (let i = 0; i < clean.length; i += 4) {
+          const a = lut[clean.charCodeAt(i)],     bv = lut[clean.charCodeAt(i + 1)];
+          const c = lut[clean.charCodeAt(i + 2)], d  = lut[clean.charCodeAt(i + 3)];
+          bytes[out++] = (a << 2) | (bv >> 4);
+          if (out < outLen) bytes[out++] = ((bv & 15) << 4) | (c >> 2);
+          if (out < outLen) bytes[out++] = ((c & 3) << 6) | d;
+        }
+        return bytes;
+      };
+
+      if (file.base64 && file.base64.length > 0) {
+        uploadContent = decodeB64ToUint8(file.base64);
+      }
 
       if (!uploadContent) {
-        // Fallback: FileSystem is reliable for content:// and file:// URIs
+        try {
+          const fetchResp = await fetch(file.uri);
+          const tentBlob  = await fetchResp.blob();
+          if (tentBlob && tentBlob.size > 0) uploadContent = tentBlob;
+        } catch { /* try FileSystem below */ }
+      }
+
+      if (!uploadContent) {
         const b64: any = await (FileSystem as any)
           .readAsStringAsync(file.uri, { encoding: 'base64' })
           .catch(() => null);
         if (typeof b64 === 'string' && b64.length > 0) {
-          // Pure-JS base64 → Uint8Array (avoids atob null-byte truncation)
-          const B64M = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-          const lut  = new Uint8Array(256);
-          for (let i = 0; i < B64M.length; i++) lut[B64M.charCodeAt(i)] = i;
-          const clean  = b64.replace(/[^A-Za-z0-9+/]/g, '');
-          const outLen = Math.floor(clean.length * 3 / 4);
-          const bytes  = new Uint8Array(outLen);
-          let out = 0;
-          for (let i = 0; i < clean.length; i += 4) {
-            const a = lut[clean.charCodeAt(i)],     bv = lut[clean.charCodeAt(i + 1)];
-            const c = lut[clean.charCodeAt(i + 2)], d  = lut[clean.charCodeAt(i + 3)];
-            bytes[out++] = (a << 2) | (bv >> 4);
-            if (out < outLen) bytes[out++] = ((bv & 15) << 4) | (c >> 2);
-            if (out < outLen) bytes[out++] = ((c & 3) << 6) | d;
-          }
-          uploadContent = bytes;
+          uploadContent = decodeB64ToUint8(b64);
         }
       }
 
@@ -482,9 +492,8 @@ export default function HealthVaultScreen() {
       return;
     }
 
-    // Keep overlay visible during storage upload
     const category: Category = aiResult.category ?? "Reports";
-    await saveRecord({ uri, name, mimeType }, category);
+    await saveRecord({ uri, name, mimeType, base64 }, category);
     setAiLoading(false);
   };
 
@@ -539,14 +548,12 @@ export default function HealthVaultScreen() {
             setNotReportModal(true);
             return;
           }
-          // Keep overlay visible during storage upload
           await saveRecord(
-            { uri: a.uri, name: a.name, size: a.size ?? undefined, mimeType: a.mimeType ?? "application/pdf" },
+            { uri: a.uri, name: a.name, size: a.size ?? undefined, mimeType: a.mimeType ?? "application/pdf", base64: base64 ?? undefined },
             aiResult.category ?? "Reports",
           );
           setAiLoading(false);
         } else {
-          // Keep overlay visible during storage upload
           await saveRecord(
             { uri: a.uri, name: a.name, size: a.size ?? undefined, mimeType: a.mimeType ?? "application/pdf" },
             "Reports",
