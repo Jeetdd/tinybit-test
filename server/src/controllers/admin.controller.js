@@ -205,21 +205,30 @@ const getUsers = async (req, res) => {
   const { role, search, page = 1, limit = 20 } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
 
-  let endpoint =
-    `/profiles?select=id,full_name,email,role,country,age,biological_sex,is_banned,last_active,created_at` +
-    `&order=created_at.desc&limit=${limit}&offset=${offset}`;
-  if (role) endpoint += `&role=eq.${role}`;
+  const base = `&order=created_at.desc&limit=${limit}&offset=${offset}` + (role ? `&role=eq.${role}` : '');
+
+  // Try full select first; fall back to safe columns if is_banned doesn't exist yet
+  const fullSelect = `id,full_name,email,role,country,age,biological_sex,is_banned,last_active,created_at`;
+  const safeSelect = `id,full_name,email,role,country,age,biological_sex,created_at`;
 
   try {
-    const result = await supabaseAdmin(endpoint);
-    let users = result.data ?? [];
+    let result = await supabaseAdmin(`/profiles?select=${fullSelect}${base}`);
+
+    if (!result.ok) {
+      console.warn('[admin] getUsers full select failed, falling back:', result.data?.message);
+      result = await supabaseAdmin(`/profiles?select=${safeSelect}${base}`);
+    }
+
+    if (!result.ok) {
+      return res.status(500).json({ success: false, error: result.data?.message ?? 'Database query failed' });
+    }
+
+    let users = (result.data ?? []).map((u) => ({ ...u, is_banned: u.is_banned ?? false }));
 
     if (search) {
       const q = search.toLowerCase();
       users = users.filter(
-        (u) =>
-          u.full_name?.toLowerCase().includes(q) ||
-          u.email?.toLowerCase().includes(q),
+        (u) => u.full_name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q),
       );
     }
 
@@ -234,10 +243,13 @@ const banUser = async (req, res) => {
   const { id } = req.params;
   const { banned } = req.body;
   try {
-    await supabaseAdmin(`/profiles?id=eq.${id}`, {
+    const result = await supabaseAdmin(`/profiles?id=eq.${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ is_banned: !!banned }),
     });
+    if (!result.ok) {
+      return res.status(500).json({ success: false, error: result.data?.message ?? 'Update failed. Run migration 054 to add the is_banned column.' });
+    }
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
@@ -274,6 +286,10 @@ const getConnections = async (req, res) => {
 
   try {
     const linksRes = await supabaseAdmin(endpoint);
+    if (!linksRes.ok) {
+      console.error('[admin] getConnections failed:', linksRes.data);
+      return res.status(500).json({ success: false, error: linksRes.data?.message ?? 'Query failed' });
+    }
     const links = linksRes.data ?? [];
 
     const enriched = await Promise.all(

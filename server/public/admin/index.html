@@ -772,6 +772,13 @@ async function loadUsers(page=1) {
 
   const d = await api('/api/users?'+p);
   if (!d) return;
+
+  if (!d.success) {
+    tbody.innerHTML = `<tr class="er"><td colspan="7">⚠️ ${esc(d.error || 'Query failed')}</td></tr>`;
+    toast(d.error || 'Users query failed', 'err');
+    return;
+  }
+
   const users = d.users ?? [];
 
   if (!users.length) {
@@ -842,6 +849,13 @@ async function loadConnections(page=1) {
 
   const d = await api('/api/connections?'+p);
   if (!d) return;
+
+  if (!d.success) {
+    tbody.innerHTML = `<tr class="er"><td colspan="9">⚠️ ${esc(d.error || 'Query failed')}</td></tr>`;
+    toast(d.error || 'Connections query failed', 'err');
+    return;
+  }
+
   const rows = d.connections ?? [];
 
   if (!rows.length) {
