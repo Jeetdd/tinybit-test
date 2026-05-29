@@ -198,6 +198,11 @@ export default function HealthVaultScreen() {
   const [forecastResult,  setForecastResult]  = useState<ForecastResult | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastModal,   setForecastModal]   = useState(false);
+  const [forecastTitle,   setForecastTitle]   = useState('AI Health Insights');
+
+  // Multi-select for combined forecasting
+  const [selectMode,  setSelectMode]  = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Share to doctor
   const [sharePickerModal, setSharePickerModal] = useState(false);
@@ -604,6 +609,7 @@ export default function HealthVaultScreen() {
     if (!r.uri) { Alert.alert("No File", "This record has no file to analyse."); return; }
     setForecastRecord(r);
     setForecastResult(null);
+    setForecastTitle('AI Health Insights');
     setForecastModal(true);
     setForecastLoading(true);
 
@@ -691,6 +697,91 @@ export default function HealthVaultScreen() {
 
       if (json?.data) setForecastResult(json.data as ForecastResult);
       else Alert.alert("AI Unavailable", json?.message ?? "Could not analyse this report. Please try again.");
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Something went wrong");
+    } finally {
+      setForecastLoading(false);
+    }
+  };
+
+  // ── Multi-Report Forecast ─────────────────────────────────────
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); };
+
+  const toBase64Remote = async (uri: string): Promise<string> => {
+    const dlResp = await fetch(uri);
+    if (!dlResp.ok) return '';
+    const arrayBuffer = await dlResp.arrayBuffer();
+    if (!arrayBuffer || arrayBuffer.byteLength < 10) return '';
+    const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const src = new Uint8Array(arrayBuffer);
+    const n = src.length;
+    const out: string[] = [];
+    for (let i = 0; i < n; i += 3072) {
+      let s = '';
+      const end = Math.min(i + 3072, n);
+      for (let j = i; j < end; j += 3) {
+        const a = src[j], b = src[j + 1] ?? 0, c = src[j + 2] ?? 0;
+        s += B64[a >> 2] + B64[((a & 3) << 4) | (b >> 4)] +
+             (j + 1 < n ? B64[((b & 15) << 2) | (c >> 6)] : '=') +
+             (j + 2 < n ? B64[c & 63] : '=');
+      }
+      out.push(s);
+    }
+    return out.join('');
+  };
+
+  const handleMultiForecast = async () => {
+    const selected = records.filter(r => selectedIds.has(r.id) && r.uri);
+    if (selected.length < 2) return;
+
+    exitSelectMode();
+    setForecastRecord(null);
+    setForecastResult(null);
+    setForecastTitle(`${selected.length}-Report Analysis`);
+    setForecastModal(true);
+    setForecastLoading(true);
+
+    try {
+      const token = await getToken();
+      if (!token) { setForecastLoading(false); return; }
+
+      const recordsData = await Promise.all(selected.map(async (r) => {
+        const isRemote = (r.uri ?? '').startsWith('http://') || (r.uri ?? '').startsWith('https://');
+        const base64   = isRemote ? await toBase64Remote(r.uri!) : '';
+        return { base64, mimeType: r.mime_type ?? 'image/jpeg', category: r.category, title: r.title, date: r.date };
+      }));
+
+      const valid = recordsData.filter(r => r.base64.length > 100);
+      if (valid.length === 0) {
+        Alert.alert("Read Error", "Could not read any selected files. Re-upload them and try again.");
+        setForecastModal(false);
+        return;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/ai/health-forecast-multi`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ records: valid }),
+      });
+
+      const text = await res.text();
+      let json: any;
+      try { json = JSON.parse(text); } catch {
+        Alert.alert("Server Error", "Could not reach the AI service. Please restart the backend server.");
+        setForecastModal(false);
+        return;
+      }
+      if (json?.data) setForecastResult(json.data as ForecastResult);
+      else Alert.alert("AI Unavailable", json?.message ?? "Could not analyse the reports. Please try again.");
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Something went wrong");
     } finally {
@@ -859,11 +950,25 @@ export default function HealthVaultScreen() {
               </Text>
             )}
           </View>
-          <Pressable onPress={openMasterFilter} style={[s.filterBtn, hasActiveFilters && s.filterBtnActive]}>
-            <Ionicons name="options-outline" size={16} color={hasActiveFilters ? C.white : C.navy} />
-            <Text style={[s.filterBtnText, hasActiveFilters && s.filterBtnTextActive]}>Filter</Text>
-            {hasActiveFilters && <View style={s.filterDot} />}
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            {!selectMode && filtered.length >= 2 && (
+              <Pressable onPress={() => setSelectMode(true)} style={s.selectBtn}>
+                <Ionicons name="albums-outline" size={14} color={C.navy} />
+                <Text style={s.selectBtnText}>Compare</Text>
+              </Pressable>
+            )}
+            {selectMode ? (
+              <Pressable onPress={exitSelectMode} style={[s.filterBtn, { borderColor: '#E05A7A' }]}>
+                <Text style={[s.filterBtnText, { color: '#E05A7A' }]}>Cancel</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={openMasterFilter} style={[s.filterBtn, hasActiveFilters && s.filterBtnActive]}>
+                <Ionicons name="options-outline" size={16} color={hasActiveFilters ? C.white : C.navy} />
+                <Text style={[s.filterBtnText, hasActiveFilters && s.filterBtnTextActive]}>Filter</Text>
+                {hasActiveFilters && <View style={s.filterDot} />}
+              </Pressable>
+            )}
+          </View>
         </View>
 
         <View style={s.list}>
@@ -876,50 +981,69 @@ export default function HealthVaultScreen() {
               <Text style={s.emptySubText}>Tap "Scan Prescription" above to add your first document</Text>
             </View>
           ) : (
-            filtered.map((r, i) => (
-              <Animated.View key={r.id} entering={FadeInDown.delay(240 + i * 60)} style={s.recCard}>
-                <View style={s.recRow}>
-                  <View style={[s.iconCircle, { backgroundColor: badgeBgForCategory(r.category) }]}>
-                    <Ionicons name={(r.icon_name || "document-text-outline") as any} size={22} color={badgeColorForCategory(r.category)} />
-                  </View>
-                  <View style={s.recMid}>
-                    <Text style={s.recTitle} numberOfLines={1}>{r.title}</Text>
-                    <Text style={s.recDate}>{r.date}</Text>
-                  </View>
-                  <View style={s.recActions}>
-                    <Pressable hitSlop={8} style={s.actionIconBtn} onPress={() => handleView(r)}>
-                      <Ionicons name="eye-outline" size={24} color={C.accent} />
-                    </Pressable>
-                    <Pressable hitSlop={8} style={s.actionIconBtn} onPress={() => openEdit(r)}>
-                      <Ionicons name="create-outline" size={22} color="#F4A46A" />
-                    </Pressable>
-                    <Pressable hitSlop={8} style={s.actionIconBtn} onPress={async () => {
-                      if (!r.uri) { Alert.alert("No File", "This record has no file to share."); return; }
-                      const ok = await Sharing.isAvailableAsync();
-                      if (ok) Sharing.shareAsync(r.uri);
-                      else Alert.alert("Sharing not supported on this device.");
-                    }}>
-                      <Ionicons name="share-outline" size={24} color={C.accent} />
-                    </Pressable>
-                    <Pressable onPress={() => deleteRecord(r)} hitSlop={8} style={s.actionIconBtn}>
-                      <Ionicons name="trash-outline" size={24} color="#E05A7A" />
-                    </Pressable>
-                  </View>
-                </View>
-                <View style={s.recBottom}>
-                  <View style={[s.badge, { backgroundColor: r.badge_bg || badgeBgForCategory(r.category) }]}>
-                    <Text style={[s.badgeText, { color: r.badge_color || badgeColorForCategory(r.category) }]}>
-                      {r.category}{r.ai_read ? " · AI Read" : ""}
-                    </Text>
-                  </View>
-                  <Pressable onPress={() => handleGetForecast(r)} style={s.insightBtn}>
-                    <Ionicons name="sparkles" size={12} color={C.white} />
-                    <Text style={s.insightBtnText}>AI Insights</Text>
+            filtered.map((r, i) => {
+              const isSelected = selectedIds.has(r.id);
+              return (
+                <Animated.View key={r.id} entering={FadeInDown.delay(240 + i * 60)}>
+                  <Pressable
+                    onPress={() => selectMode ? toggleSelect(r.id) : undefined}
+                    style={[s.recCard, isSelected && s.recCardSelected]}
+                  >
+                    <View style={s.recRow}>
+                      {/* Checkbox in select mode, icon otherwise */}
+                      {selectMode ? (
+                        <View style={[s.selectCircle, isSelected && s.selectCircleActive]}>
+                          {isSelected && <Ionicons name="checkmark" size={16} color={C.white} />}
+                        </View>
+                      ) : (
+                        <View style={[s.iconCircle, { backgroundColor: badgeBgForCategory(r.category) }]}>
+                          <Ionicons name={(r.icon_name || "document-text-outline") as any} size={22} color={badgeColorForCategory(r.category)} />
+                        </View>
+                      )}
+                      <View style={s.recMid}>
+                        <Text style={s.recTitle} numberOfLines={1}>{r.title}</Text>
+                        <Text style={s.recDate}>{r.date}</Text>
+                      </View>
+                      {!selectMode && (
+                        <View style={s.recActions}>
+                          <Pressable hitSlop={8} style={s.actionIconBtn} onPress={() => handleView(r)}>
+                            <Ionicons name="eye-outline" size={24} color={C.accent} />
+                          </Pressable>
+                          <Pressable hitSlop={8} style={s.actionIconBtn} onPress={() => openEdit(r)}>
+                            <Ionicons name="create-outline" size={22} color="#F4A46A" />
+                          </Pressable>
+                          <Pressable hitSlop={8} style={s.actionIconBtn} onPress={async () => {
+                            if (!r.uri) { Alert.alert("No File", "This record has no file to share."); return; }
+                            const ok = await Sharing.isAvailableAsync();
+                            if (ok) Sharing.shareAsync(r.uri);
+                            else Alert.alert("Sharing not supported on this device.");
+                          }}>
+                            <Ionicons name="share-outline" size={24} color={C.accent} />
+                          </Pressable>
+                          <Pressable onPress={() => deleteRecord(r)} hitSlop={8} style={s.actionIconBtn}>
+                            <Ionicons name="trash-outline" size={24} color="#E05A7A" />
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+                    {!selectMode && (
+                      <View style={s.recBottom}>
+                        <View style={[s.badge, { backgroundColor: r.badge_bg || badgeBgForCategory(r.category) }]}>
+                          <Text style={[s.badgeText, { color: r.badge_color || badgeColorForCategory(r.category) }]}>
+                            {r.category}{r.ai_read ? " · AI Read" : ""}
+                          </Text>
+                        </View>
+                        <Pressable onPress={() => handleGetForecast(r)} style={s.insightBtn}>
+                          <Ionicons name="sparkles" size={12} color={C.white} />
+                          <Text style={s.insightBtnText}>AI Insights</Text>
+                        </Pressable>
+                        <Text style={s.recSize}>{r.size}</Text>
+                      </View>
+                    )}
                   </Pressable>
-                  <Text style={s.recSize}>{r.size}</Text>
-                </View>
-              </Animated.View>
-            ))
+                </Animated.View>
+              );
+            })
           )}
         </View>
 
@@ -960,6 +1084,28 @@ export default function HealthVaultScreen() {
           )}
         </>
       </ScrollView>
+
+      {/* ── Multi-Select Floating Bar ── */}
+      {selectMode && (
+        <Animated.View entering={FadeInUp} style={[s.multiBar, { bottom: insets.bottom + 60 + 12 }]}>
+          <View style={s.multiBarInner}>
+            <View>
+              <Text style={s.multiBarCount}>{selectedIds.size} selected</Text>
+              <Text style={s.multiBarHint}>Select 2+ reports to compare</Text>
+            </View>
+            <Pressable
+              onPress={handleMultiForecast}
+              disabled={selectedIds.size < 2}
+              style={[s.multiBarBtn, selectedIds.size < 2 && s.multiBarBtnDisabled]}
+            >
+              <Ionicons name="sparkles" size={16} color={C.white} />
+              <Text style={s.multiBarBtnText}>
+                {selectedIds.size < 2 ? 'Select Reports' : `Analyse ${selectedIds.size} Reports`}
+              </Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      )}
 
       {/* ── AI Loading Overlay ── */}
       {aiLoading && (
@@ -1175,7 +1321,7 @@ export default function HealthVaultScreen() {
             {/* Header */}
             <View style={s.forecastHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={s.sheetTitle}>AI Health Insights</Text>
+                <Text style={s.sheetTitle}>{forecastTitle}</Text>
                 {forecastRecord && (
                   <Text style={s.forecastRecordName} numberOfLines={1}>{forecastRecord.title}</Text>
                 )}
@@ -1634,6 +1780,39 @@ const s = StyleSheet.create({
   filterModalFooter: {
     flexDirection: "row", gap: 10, marginTop: 20,
   },
+
+  selectBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1.5, borderColor: C.navy, backgroundColor: C.white,
+  },
+  selectBtnText: { fontSize: 13, fontWeight: "700" as const, color: C.navy },
+
+  recCardSelected: {
+    borderWidth: 2, borderColor: C.accent,
+  },
+  selectCircle: {
+    width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: C.border,
+    backgroundColor: C.bg, justifyContent: "center", alignItems: "center", marginRight: 12,
+  },
+  selectCircleActive: { backgroundColor: C.accent, borderColor: C.accent },
+
+  multiBar: {
+    position: "absolute", left: 16, right: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 16, elevation: 10,
+  },
+  multiBarInner: {
+    backgroundColor: C.navyDark, borderRadius: 22, paddingHorizontal: 20, paddingVertical: 14,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  multiBarCount:    { fontSize: 16, fontWeight: "900" as const, color: C.white },
+  multiBarHint:     { fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 },
+  multiBarBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: C.accent, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 16,
+  },
+  multiBarBtnDisabled: { backgroundColor: "rgba(255,255,255,0.15)" },
+  multiBarBtnText: { fontSize: 13, fontWeight: "800" as const, color: C.white },
 
   insightBtn: {
     flexDirection: "row", alignItems: "center", gap: 4,

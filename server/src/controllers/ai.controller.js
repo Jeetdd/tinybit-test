@@ -691,4 +691,86 @@ const healthForecast = async (req, res) => {
   }
 };
 
-module.exports = { chat, transcribe, tts, analyzeReport, analyzeFood, suggestClothing, wellnessSummary, healthForecast };
+// ═══════════════════════════════════════════════════════════════════════════════
+// 9. HEALTH FORECAST MULTI — analyse several reports together in one Gemini call
+// ═══════════════════════════════════════════════════════════════════════════════
+const MULTI_FORECAST_PROMPT = `You are a medical AI performing a comprehensive cross-report health analysis for an elderly patient. Multiple health documents are provided. Identify trends, improvements, and deteriorations across them.
+
+Respond ONLY with valid JSON (no markdown, no extra text):
+{
+  "reportType": "Multi-Report Analysis",
+  "summary": "2-3 sentences summarising overall health trends across ALL provided documents",
+  "alertLevel": "normal|caution|alert",
+  "metrics": [
+    {
+      "name": "Metric name",
+      "value": "Latest or trended value with unit",
+      "status": "normal|low|high|borderline",
+      "normalRange": "Reference range",
+      "insight": "How this metric changed across the reports (improving / stable / worsening)"
+    }
+  ],
+  "riskFactors": ["Risk factor identified from cross-report comparison"],
+  "recommendations": ["Actionable recommendation based on multi-report trends for elderly patient"],
+  "followUp": "Specific follow-up suggested based on trends seen across the documents"
+}
+
+Rules:
+- Compare values across reports chronologically — always note if improving, stable, or declining.
+- alertLevel: "normal" = trends positive, "caution" = some borderline trends, "alert" = significant worsening.
+- If only one document is readable, still analyse it and note limited trend data.`;
+
+const healthForecastMulti = async (req, res) => {
+  try {
+    const { records } = req.body || {};
+    if (!Array.isArray(records) || records.length < 1) {
+      return res.status(400).json({ success: false, message: 'At least one record is required' });
+    }
+
+    // Build Gemini content parts — one inlineData block per document
+    const parts = [];
+    for (const rec of records) {
+      if (typeof rec.base64 !== 'string' || rec.base64.length < 100) continue;
+      parts.push({ inlineData: { mimeType: rec.mimeType || 'image/jpeg', data: rec.base64 } });
+      parts.push({ text: `[${rec.category || 'Document'}: "${rec.title || 'Record'}" — ${rec.date || 'Date unknown'}]` });
+    }
+
+    if (parts.length === 0) {
+      return res.status(400).json({ success: false, message: 'No readable documents found in the selection' });
+    }
+
+    parts.push({ text: MULTI_FORECAST_PROMPT });
+
+    // ── Try Gemini Vision ────────────────────────────────────────────────────
+    try {
+      const geminiResp = await geminiFetch(GEMINI_MODEL_VISION, {
+        contents: [{ parts }],
+        generationConfig: { maxOutputTokens: 1500, temperature: 0.2 },
+      }, 90_000);   // larger timeout — processing N documents takes longer
+
+      if (geminiResp.ok) {
+        const json    = await geminiResp.json();
+        const content = geminiText(json).trim().replace(/```json|```/g, '').trim();
+        try {
+          const result = JSON.parse(content);
+          return res.json({ success: true, data: result, provider: 'gemini' });
+        } catch { /* fall through */ }
+      } else {
+        const errBody = await geminiResp.text();
+        console.warn('[healthForecastMulti] Gemini error:', geminiResp.status, errBody);
+      }
+    } catch (geminiErr) {
+      console.warn('[healthForecastMulti] Gemini failed:', geminiErr.message);
+    }
+
+    return res.json({ success: true, data: {
+      ...FORECAST_FALLBACK,
+      reportType: 'Multi-Report Analysis',
+      summary: 'AI analysis is currently unavailable. Please try again later.',
+    }});
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
+  }
+};
+
+module.exports = { chat, transcribe, tts, analyzeReport, analyzeFood, suggestClothing, wellnessSummary, healthForecast, healthForecastMulti };
