@@ -22,7 +22,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../utils/supabase";
@@ -69,6 +69,24 @@ type HealthRecord = {
 type Doctor = {
   name: string;
   phone: string | null;
+};
+
+type ForecastMetric = {
+  name: string;
+  value: string;
+  status: 'normal' | 'low' | 'high' | 'borderline';
+  normalRange: string;
+  insight: string;
+};
+
+type ForecastResult = {
+  reportType: string;
+  summary: string;
+  alertLevel: 'normal' | 'caution' | 'alert';
+  metrics: ForecastMetric[];
+  riskFactors: string[];
+  recommendations: string[];
+  followUp: string;
 };
 
 type FileInfo = { uri: string; name: string; size?: number; mimeType?: string };
@@ -123,6 +141,23 @@ async function callAnalyzeReport(
   }
 }
 
+function alertBannerStyle(level: 'normal' | 'caution' | 'alert') {
+  if (level === 'alert')   return { backgroundColor: '#FDE8EC' };
+  if (level === 'caution') return { backgroundColor: '#FEF3CD' };
+  return { backgroundColor: '#E6F9F1' };
+}
+function alertBannerTextColor(level: 'normal' | 'caution' | 'alert') {
+  if (level === 'alert')   return '#E05A7A';
+  if (level === 'caution') return '#B45309';
+  return C.prescGreenText;
+}
+function metricStatusColor(status: string) {
+  if (status === 'high')       return '#E05A7A';
+  if (status === 'low')        return '#F4A46A';
+  if (status === 'borderline') return '#FBBF24';
+  return C.prescGreenText;
+}
+
 export default function HealthVaultScreen() {
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
@@ -135,6 +170,11 @@ export default function HealthVaultScreen() {
   const elderName = params.elderName as string | undefined;
 
   const [activeFilter,     setActiveFilter]     = useState("All");
+  const [dateFilter,       setDateFilter]       = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [masterFilterOpen, setMasterFilterOpen] = useState(false);
+  // Temp state held while the master-filter sheet is open
+  const [tempCategory,     setTempCategory]     = useState("All");
+  const [tempDate,         setTempDate]         = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [records,          setRecords]          = useState<HealthRecord[]>([]);
   const [doctors,          setDoctors]          = useState<Doctor[]>([]);
   const [loadingRecords,   setLoadingRecords]   = useState(false);
@@ -152,6 +192,12 @@ export default function HealthVaultScreen() {
   const [editTitle,        setEditTitle]        = useState('');
   const [editCategory,     setEditCategory]     = useState<Category>('Reports');
   const [savingEdit,       setSavingEdit]       = useState(false);
+
+  // Health forecast
+  const [forecastRecord,  setForecastRecord]  = useState<HealthRecord | null>(null);
+  const [forecastResult,  setForecastResult]  = useState<ForecastResult | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastModal,   setForecastModal]   = useState(false);
 
   // Share to doctor
   const [sharePickerModal, setSharePickerModal] = useState(false);
@@ -507,6 +553,50 @@ export default function HealthVaultScreen() {
     }
   };
 
+  // ── Health Forecast ───────────────────────────────────────────
+
+  const handleGetForecast = async (r: HealthRecord) => {
+    if (!r.uri) { Alert.alert("No File", "This record has no file to analyse."); return; }
+    setForecastRecord(r);
+    setForecastResult(null);
+    setForecastModal(true);
+    setForecastLoading(true);
+
+    try {
+      const token = await getToken();
+      if (!token) { setForecastLoading(false); return; }
+
+      // Send the Supabase public URL — backend fetches and converts to base64 server-side.
+      // This avoids downloading the file to the device (which can be large PDFs).
+      const res = await fetch(`${API_BASE_URL}/ai/health-forecast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          uri:      r.uri,
+          mimeType: r.mime_type ?? 'image/jpeg',
+          category: r.category,
+          title:    r.title,
+        }),
+      });
+
+      // Guard against HTML error pages (e.g. server not restarted yet)
+      const text = await res.text();
+      let json: any;
+      try { json = JSON.parse(text); } catch {
+        Alert.alert("Server Error", "Could not reach the AI service. Please restart the backend server and try again.");
+        setForecastModal(false);
+        return;
+      }
+
+      if (json?.data) setForecastResult(json.data as ForecastResult);
+      else Alert.alert("AI Unavailable", json?.message ?? "Could not analyse this report. Please try again.");
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Something went wrong");
+    } finally {
+      setForecastLoading(false);
+    }
+  };
+
   // ── Share ──────────────────────────────────────────────────────
 
   const handleShareToDoctor = (doctor: Doctor) => {
@@ -532,7 +622,46 @@ export default function HealthVaultScreen() {
 
   // ── Derived ────────────────────────────────────────────────────
 
-  const filtered = activeFilter === "All" ? records : records.filter(r => r.category === activeFilter);
+  const filtered = records.filter(r => {
+    const catMatch = activeFilter === "All" || r.category === activeFilter;
+
+    let dateMatch = true;
+    if (dateFilter !== 'all') {
+      const now = Date.now();
+      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+      if (dateFilter === 'today') {
+        dateMatch = r.timestamp >= startOfToday.getTime();
+      } else if (dateFilter === 'week') {
+        dateMatch = r.timestamp >= now - 7 * 24 * 60 * 60 * 1000;
+      } else if (dateFilter === 'month') {
+        const som = new Date(); som.setDate(1); som.setHours(0, 0, 0, 0);
+        dateMatch = r.timestamp >= som.getTime();
+      }
+    }
+    return catMatch && dateMatch;
+  });
+
+  const hasActiveFilters = activeFilter !== "All" || dateFilter !== 'all';
+
+  const openMasterFilter = () => {
+    setTempCategory(activeFilter);
+    setTempDate(dateFilter);
+    setMasterFilterOpen(true);
+  };
+
+  const applyMasterFilter = () => {
+    setActiveFilter(tempCategory);
+    setDateFilter(tempDate);
+    setMasterFilterOpen(false);
+  };
+
+  const resetMasterFilter = () => {
+    setTempCategory("All");
+    setTempDate('all');
+    setActiveFilter("All");
+    setDateFilter('all');
+    setMasterFilterOpen(false);
+  };
 
   const counts = {
     reports: records.filter(r => r.category === "Reports").length,
@@ -620,7 +749,20 @@ export default function HealthVaultScreen() {
 
         {/* ── Records ── */}
         <View style={s.secHeader}>
-          <Text style={s.secTitle}>Recent Records</Text>
+          <View>
+            <Text style={s.secTitle}>Recent Records</Text>
+            {hasActiveFilters && (
+              <Text style={s.filterActive}>
+                {activeFilter !== "All" ? activeFilter : "All categories"}
+                {dateFilter !== 'all' ? ` · ${dateFilter === 'today' ? 'Today' : dateFilter === 'week' ? 'This Week' : 'This Month'}` : ''}
+              </Text>
+            )}
+          </View>
+          <Pressable onPress={openMasterFilter} style={[s.filterBtn, hasActiveFilters && s.filterBtnActive]}>
+            <Ionicons name="options-outline" size={16} color={hasActiveFilters ? C.white : C.navy} />
+            <Text style={[s.filterBtnText, hasActiveFilters && s.filterBtnTextActive]}>Filter</Text>
+            {hasActiveFilters && <View style={s.filterDot} />}
+          </Pressable>
         </View>
 
         <View style={s.list}>
@@ -669,6 +811,10 @@ export default function HealthVaultScreen() {
                       {r.category}{r.ai_read ? " · AI Read" : ""}
                     </Text>
                   </View>
+                  <Pressable onPress={() => handleGetForecast(r)} style={s.insightBtn}>
+                    <Ionicons name="sparkles" size={12} color={C.white} />
+                    <Text style={s.insightBtnText}>AI Insights</Text>
+                  </Pressable>
                   <Text style={s.recSize}>{r.size}</Text>
                 </View>
               </Animated.View>
@@ -912,6 +1058,198 @@ export default function HealthVaultScreen() {
             showDial
           />
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Health Forecast Modal ── */}
+      <Modal
+        visible={forecastModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setForecastModal(false)}
+      >
+        <View style={s.overlay}>
+          <Animated.View entering={FadeInUp} style={[s.sheet, { maxHeight: '90%' }]}>
+            <View style={s.handle} />
+
+            {/* Header */}
+            <View style={s.forecastHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.sheetTitle}>AI Health Insights</Text>
+                {forecastRecord && (
+                  <Text style={s.forecastRecordName} numberOfLines={1}>{forecastRecord.title}</Text>
+                )}
+              </View>
+              <Pressable onPress={() => setForecastModal(false)} style={s.forecastClose}>
+                <Ionicons name="close" size={20} color={C.muted} />
+              </Pressable>
+            </View>
+
+            {forecastLoading ? (
+              <View style={s.forecastLoading}>
+                <ActivityIndicator size="large" color={C.accent} />
+                <Text style={s.forecastLoadingText}>Analysing your report…</Text>
+                <Text style={s.forecastLoadingSub}>AI is reading and extracting health data</Text>
+              </View>
+            ) : forecastResult ? (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 4 }}>
+                {/* Alert Level Banner */}
+                <View style={[s.alertBanner, alertBannerStyle(forecastResult.alertLevel)]}>
+                  <Ionicons
+                    name={forecastResult.alertLevel === 'alert' ? 'warning' : forecastResult.alertLevel === 'caution' ? 'alert-circle' : 'checkmark-circle'}
+                    size={18}
+                    color={alertBannerTextColor(forecastResult.alertLevel)}
+                  />
+                  <Text style={[s.alertBannerText, { color: alertBannerTextColor(forecastResult.alertLevel) }]}>
+                    {forecastResult.alertLevel === 'alert' ? 'Needs Attention' : forecastResult.alertLevel === 'caution' ? 'Some Values to Watch' : 'All Looking Good'}
+                  </Text>
+                  <View style={[s.reportTypeBadge, { backgroundColor: C.purpleBg }]}>
+                    <Text style={[s.reportTypeText, { color: C.purpleText }]}>{forecastResult.reportType}</Text>
+                  </View>
+                </View>
+
+                {/* Summary */}
+                <Text style={s.forecastSummary}>{forecastResult.summary}</Text>
+
+                {/* Metrics */}
+                {forecastResult.metrics.length > 0 && (
+                  <>
+                    <Text style={s.forecastSectionTitle}>Health Metrics</Text>
+                    <View style={s.metricsGrid}>
+                      {forecastResult.metrics.map((m, idx) => (
+                        <View key={idx} style={[s.metricCard, { borderLeftColor: metricStatusColor(m.status) }]}>
+                          <View style={s.metricRow}>
+                            <Text style={s.metricName}>{m.name}</Text>
+                            <View style={[s.metricStatusBadge, { backgroundColor: metricStatusColor(m.status) + '22' }]}>
+                              <Text style={[s.metricStatusText, { color: metricStatusColor(m.status) }]}>
+                                {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={s.metricValue}>{m.value}</Text>
+                          <Text style={s.metricRange}>Normal: {m.normalRange}</Text>
+                          <Text style={s.metricInsight}>{m.insight}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {/* Risk Factors */}
+                {forecastResult.riskFactors.length > 0 && (
+                  <>
+                    <Text style={s.forecastSectionTitle}>Risk Factors</Text>
+                    <View style={s.forecastList}>
+                      {forecastResult.riskFactors.map((rf, idx) => (
+                        <View key={idx} style={s.forecastListItem}>
+                          <Ionicons name="alert-circle-outline" size={15} color="#F4A46A" style={{ marginTop: 1 }} />
+                          <Text style={s.forecastListText}>{rf}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {/* Recommendations */}
+                {forecastResult.recommendations.length > 0 && (
+                  <>
+                    <Text style={s.forecastSectionTitle}>Recommendations</Text>
+                    <View style={s.forecastList}>
+                      {forecastResult.recommendations.map((rec, idx) => (
+                        <View key={idx} style={s.forecastListItem}>
+                          <Ionicons name="checkmark-circle-outline" size={15} color={C.prescGreenText} style={{ marginTop: 1 }} />
+                          <Text style={s.forecastListText}>{rec}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {/* Follow-up */}
+                {!!forecastResult.followUp && (
+                  <View style={s.followUpCard}>
+                    <Ionicons name="calendar-outline" size={18} color={C.accent} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.followUpLabel}>Follow-up</Text>
+                      <Text style={s.followUpText}>{forecastResult.followUp}</Text>
+                    </View>
+                  </View>
+                )}
+
+                <Text style={s.aiDisclaimer}>
+                  AI-generated insights are for informational purposes only. Always consult your doctor for medical decisions.
+                </Text>
+                <View style={{ height: 16 }} />
+              </ScrollView>
+            ) : null}
+
+            {!forecastLoading && (
+              <Pressable style={[s.cancelBtn, { marginTop: 12 }]} onPress={() => setForecastModal(false)}>
+                <Text style={s.cancelText}>Close</Text>
+              </Pressable>
+            )}
+          </Animated.View>
+        </View>
+      </Modal>
+
+      {/* ── Master Filter Modal ── */}
+      <Modal
+        visible={masterFilterOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMasterFilterOpen(false)}
+      >
+        <View style={s.overlay}>
+          <Animated.View entering={FadeInUp} style={s.sheet}>
+            <View style={s.handle} />
+            <View style={s.filterModalHeader}>
+              <Text style={s.sheetTitle}>Filter Records</Text>
+              <Pressable onPress={resetMasterFilter}>
+                <Text style={s.resetText}>Reset All</Text>
+              </Pressable>
+            </View>
+            <Text style={s.filterSectionLabel}>Category</Text>
+            <View style={s.filterChipRow}>
+              {FILTERS.map((f, i) => (
+                <Pressable
+                  key={f}
+                  onPress={() => setTempCategory(f)}
+                  style={[s.chip, tempCategory === f && s.chipActive, { marginBottom: 8 }]}
+                >
+                  <Text style={[s.chipText, tempCategory === f && s.chipTextActive]}>
+                    {FILTER_LABELS[i]}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[s.filterSectionLabel, { marginTop: 8 }]}>Date Range</Text>
+            <View style={s.filterChipRow}>
+              {([
+                ['all',   'All Time'],
+                ['today', 'Today'],
+                ['week',  'This Week'],
+                ['month', 'This Month'],
+              ] as const).map(([val, label]) => (
+                <Pressable
+                  key={val}
+                  onPress={() => setTempDate(val)}
+                  style={[s.chip, tempDate === val && s.chipActive, { marginBottom: 8 }]}
+                >
+                  <Text style={[s.chipText, tempDate === val && s.chipTextActive]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={s.filterModalFooter}>
+              <Pressable style={s.cancelBtn} onPress={() => setMasterFilterOpen(false)}>
+                <Text style={s.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={[s.cancelBtn, { backgroundColor: C.navy, flex: 1.5 }]} onPress={applyMasterFilter}>
+                <Text style={[s.cancelText, { color: C.white }]}>Apply Filter</Text>
+              </Pressable>
+            </View>
+          </Animated.View>
+        </View>
       </Modal>
 
       {/* ── Edit Record Modal ── */}
@@ -1164,5 +1502,106 @@ const s = StyleSheet.create({
   doctorPhoneDivider: { width: 1, height: 26, backgroundColor: C.border, marginRight: 10 },
   doctorPhoneInput: {
     flex: 1, fontSize: 15, fontWeight: "600" as const, color: C.navyDark,
+  },
+
+  filterBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1.5, borderColor: C.navy, backgroundColor: C.white,
+  },
+  filterBtnActive:    { backgroundColor: C.navy, borderColor: C.navy },
+  filterBtnText:      { fontSize: 13, fontWeight: "700" as const, color: C.navy },
+  filterBtnTextActive:{ color: C.white },
+  filterDot: {
+    width: 7, height: 7, borderRadius: 4,
+    backgroundColor: C.accent, marginLeft: 2,
+  },
+  filterActive: { fontSize: 11, fontWeight: "600" as const, color: C.accent, marginTop: 2 },
+
+  filterModalHeader: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 4,
+  },
+  resetText: { fontSize: 14, fontWeight: "700" as const, color: "#E05A7A" },
+  filterSectionLabel: {
+    fontSize: 13, fontWeight: "700" as const, color: C.muted,
+    marginBottom: 10, marginTop: 18,
+  },
+  filterChipRow: {
+    flexDirection: "row", flexWrap: "wrap", gap: 8,
+  },
+  filterModalFooter: {
+    flexDirection: "row", gap: 10, marginTop: 20,
+  },
+
+  insightBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: C.navy, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+  },
+  insightBtnText: { fontSize: 11, fontWeight: "700" as const, color: C.white },
+
+  // Forecast modal
+  forecastHeader: {
+    flexDirection: "row", alignItems: "flex-start",
+    justifyContent: "space-between", marginBottom: 12,
+  },
+  forecastRecordName: { fontSize: 12, color: C.muted, fontWeight: "500" as const, marginTop: 2 },
+  forecastClose: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: C.bg, justifyContent: "center", alignItems: "center", marginLeft: 8,
+  },
+  forecastLoading: {
+    paddingVertical: 48, alignItems: "center", gap: 12,
+  },
+  forecastLoadingText: { fontSize: 16, fontWeight: "800" as const, color: C.navyDark },
+  forecastLoadingSub:  { fontSize: 13, color: C.muted, textAlign: "center" },
+
+  alertBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    borderRadius: 16, padding: 14, marginBottom: 12,
+  },
+  alertBannerText: { fontSize: 14, fontWeight: "800" as const, flex: 1 },
+  reportTypeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  reportTypeText:  { fontSize: 11, fontWeight: "700" as const },
+
+  forecastSummary: {
+    fontSize: 14, fontWeight: "500" as const, color: C.navyDark,
+    lineHeight: 21, marginBottom: 16,
+  },
+  forecastSectionTitle: {
+    fontSize: 14, fontWeight: "900" as const, color: C.navyDark,
+    marginBottom: 10, marginTop: 4,
+  },
+  metricsGrid: { gap: 10, marginBottom: 16 },
+  metricCard: {
+    backgroundColor: C.bg, borderRadius: 16, padding: 14,
+    borderLeftWidth: 4,
+  },
+  metricRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+  metricName:        { fontSize: 13, fontWeight: "800" as const, color: C.navyDark, flex: 1 },
+  metricStatusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  metricStatusText:  { fontSize: 11, fontWeight: "700" as const },
+  metricValue:       { fontSize: 16, fontWeight: "900" as const, color: C.navyDark, marginBottom: 2 },
+  metricRange:       { fontSize: 11, color: C.muted, fontWeight: "500" as const, marginBottom: 4 },
+  metricInsight:     { fontSize: 12, color: "#5A6A7E", fontWeight: "500" as const, lineHeight: 17 },
+
+  forecastList: { gap: 8, marginBottom: 16 },
+  forecastListItem: {
+    flexDirection: "row", gap: 8, alignItems: "flex-start",
+    backgroundColor: C.bg, borderRadius: 14, padding: 12,
+  },
+  forecastListText: { flex: 1, fontSize: 13, fontWeight: "500" as const, color: C.navyDark, lineHeight: 19 },
+
+  followUpCard: {
+    flexDirection: "row", gap: 12, alignItems: "flex-start",
+    backgroundColor: "#EBF6FF", borderRadius: 16, padding: 14, marginBottom: 16,
+    borderWidth: 1, borderColor: "#BAE3F9",
+  },
+  followUpLabel: { fontSize: 12, fontWeight: "700" as const, color: C.accent, marginBottom: 2 },
+  followUpText:  { fontSize: 13, fontWeight: "500" as const, color: C.navyDark, lineHeight: 19 },
+
+  aiDisclaimer: {
+    fontSize: 11, color: C.muted, textAlign: "center",
+    fontStyle: "italic", marginTop: 4, lineHeight: 16,
   },
 });

@@ -10,6 +10,7 @@ const {
   analyzeFood,
   suggestClothing,
   wellnessSummary,
+  healthForecast,
 } = require('../controllers/ai.controller');
 
 // Sathi AI core
@@ -24,5 +25,6 @@ router.post('/analyze-report',  requireSupabaseAuth, analyzeReport);
 router.post('/analyze-food',    requireSupabaseAuth, analyzeFood);       // Calorie calculator
 router.post('/suggest-clothing',requireSupabaseAuth, suggestClothing);   // Weather AI suggestions
 router.post('/wellness-summary',requireSupabaseAuth, wellnessSummary);   // Wellness log AI summary
+router.post('/health-forecast', requireSupabaseAuth, healthForecast);   // Health record AI insights
 
 module.exports = router;

@@ -554,4 +554,159 @@ overallStatus must be: "Good", "Fair", or "Needs Attention". alertLevel must be:
   }
 };
 
-module.exports = { chat, transcribe, tts, analyzeReport, analyzeFood, suggestClothing, wellnessSummary };
+// ═══════════════════════════════════════════════════════════════════════════════
+// 8. HEALTH FORECAST — Gemini Vision (primary) → OpenAI GPT-4o-mini (fallback)
+//    Extracts health metrics from a report image/PDF and returns structured
+//    insights + recommendations tailored for elderly users.
+// ═══════════════════════════════════════════════════════════════════════════════
+const FORECAST_PROMPT = `You are a medical AI assistant analyzing a health document for an elderly patient. Extract every health metric and provide a clear, simple forecast.
+
+Respond ONLY with valid JSON (no markdown, no extra text):
+{
+  "reportType": "Blood Test|Prescription|X-Ray|Scan|General Report|Unknown",
+  "summary": "1-2 sentences summarizing the overall health status from this report",
+  "alertLevel": "normal|caution|alert",
+  "metrics": [
+    {
+      "name": "Metric name (e.g. Hemoglobin, Blood Sugar, Cholesterol)",
+      "value": "Measured value with unit (e.g. 11.2 g/dL)",
+      "status": "normal|low|high|borderline",
+      "normalRange": "Normal reference range (e.g. 12-17 g/dL)",
+      "insight": "1 simple sentence relevant to elderly health"
+    }
+  ],
+  "riskFactors": ["Risk 1 identified from this report"],
+  "recommendations": ["Clear, actionable recommendation for elderly patient"],
+  "followUp": "When and what type of follow-up is suggested"
+}
+
+Rules:
+- Extract ALL numeric values visible (blood counts, glucose, cholesterol, BP, etc.)
+- For X-ray/MRI/CT: describe findings as metrics (e.g. name:"Bone Density", value:"Mild reduction")
+- For prescriptions: list key medications (name: drug name, value: dosage + frequency)
+- alertLevel: "normal"=all values in range, "caution"=borderline/mild abnormal, "alert"=significantly abnormal
+- Recommendations must be simple and appropriate for elderly users (65+)
+- If unreadable or no metrics found, respond: {"reportType":"Unknown","summary":"Could not extract health data from this document.","alertLevel":"normal","metrics":[],"riskFactors":[],"recommendations":["Please share a clearer image of your report"],"followUp":"Consult your doctor for interpretation"}`;
+
+const FORECAST_FALLBACK = {
+  reportType: 'Unknown',
+  summary: 'AI analysis is currently unavailable. Please try again later.',
+  alertLevel: 'normal',
+  metrics: [],
+  riskFactors: [],
+  recommendations: ['Consult your doctor for a detailed interpretation of this report.'],
+  followUp: 'Schedule a visit with your doctor to review this document.',
+};
+
+const healthForecast = async (req, res) => {
+  try {
+    const { base64: rawBase64, uri, mimeType, category, title } = req.body || {};
+
+    let base64   = rawBase64;
+    let safeMime = mimeType?.trim() || 'image/jpeg';
+
+    // If a Supabase public URL was supplied instead of base64, fetch it server-side.
+    // This avoids the phone having to download + upload a large file.
+    if (!base64 && uri) {
+      try {
+        const fileResp = await fetch(uri, { signal: AbortSignal.timeout(25_000) });
+        if (!fileResp.ok) {
+          return res.status(400).json({ success: false, message: 'Could not fetch the document from storage.' });
+        }
+        const arrayBuf = await fileResp.arrayBuffer();
+        base64 = Buffer.from(arrayBuf).toString('base64');
+        if (!mimeType && /\.pdf(\?|$)/i.test(uri)) safeMime = 'application/pdf';
+      } catch (fetchErr) {
+        return res.status(400).json({ success: false, message: 'Failed to retrieve the document. Please try again.' });
+      }
+    }
+
+    if (typeof base64 !== 'string' || base64.length < 100) {
+      return res.status(400).json({ success: false, message: '`base64` or `uri` is required' });
+    }
+
+    const isImage  = safeMime.startsWith('image/');
+    // Gemini supports both images and PDFs via inlineData
+    const geminiSupported = isImage || safeMime === 'application/pdf';
+
+    const contextNote = [
+      title    ? `Document title: ${title}` : '',
+      category ? `Document category: ${category}` : '',
+    ].filter(Boolean).join('. ');
+    const prompt = contextNote ? `${FORECAST_PROMPT}\n\nContext: ${contextNote}` : FORECAST_PROMPT;
+
+    // ── Try Gemini Vision (images + PDFs) ─────────────────────────────────────
+    if (geminiSupported) {
+      try {
+        const geminiResp = await geminiFetch(GEMINI_MODEL_VISION, {
+          contents: [{
+            parts: [
+              { inlineData: { mimeType: safeMime, data: base64 } },
+              { text: prompt },
+            ],
+          }],
+          generationConfig: { maxOutputTokens: 1200, temperature: 0.2 },
+        }, 35_000);
+
+        if (geminiResp.ok) {
+          const json    = await geminiResp.json();
+          const content = geminiText(json).trim().replace(/```json|```/g, '').trim();
+          try {
+            const result = JSON.parse(content);
+            return res.json({ success: true, data: result, provider: 'gemini' });
+          } catch { /* fall through to OpenAI */ }
+        } else {
+          const errBody = await geminiResp.text();
+          console.warn('[healthForecast] Gemini error:', geminiResp.status, errBody);
+        }
+      } catch (geminiErr) {
+        console.warn('[healthForecast] Gemini failed, falling back to OpenAI:', geminiErr.message);
+      }
+    }
+
+    // ── Fallback: OpenAI GPT-4o-mini (images only — PDFs not supported inline) ─
+    // For PDFs we already tried Gemini above; skip OpenAI if it's a PDF.
+    if (safeMime === 'application/pdf') {
+      return res.json({ success: true, data: FORECAST_FALLBACK });
+    }
+
+    try {
+      const contentParts = [
+        { type: 'image_url', image_url: { url: `data:${safeMime};base64,${base64}`, detail: 'high' } },
+        { type: 'text', text: prompt },
+      ];
+
+      const oaiResp = await openAiFetch('/chat/completions', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal:  AbortSignal.timeout(35_000),
+        body: JSON.stringify({
+          model:       'gpt-4o-mini',
+          messages:    [{ role: 'user', content: contentParts }],
+          max_tokens:  1200,
+          temperature: 0.2,
+        }),
+      });
+
+      if (oaiResp.ok) {
+        const oaiJson = await oaiResp.json();
+        const content = (oaiJson?.choices?.[0]?.message?.content ?? '').trim().replace(/```json|```/g, '').trim();
+        try {
+          const result = JSON.parse(content);
+          return res.json({ success: true, data: result, provider: 'openai' });
+        } catch { /* fall through to fallback */ }
+      } else {
+        const errBody = await oaiResp.text();
+        console.warn('[healthForecast] OpenAI error:', oaiResp.status, errBody);
+      }
+    } catch (oaiErr) {
+      console.warn('[healthForecast] OpenAI also failed:', oaiErr.message);
+    }
+
+    return res.json({ success: true, data: FORECAST_FALLBACK });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
+  }
+};
+
+module.exports = { chat, transcribe, tts, analyzeReport, analyzeFood, suggestClothing, wellnessSummary, healthForecast };
