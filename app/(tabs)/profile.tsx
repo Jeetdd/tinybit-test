@@ -28,8 +28,8 @@ import GuardianProfileScreen from "../../components/guardian/GuardianProfileScre
 import "../../utils/i18n";
 
 const C = {
-  headerStart: '#304B76',
-  headerEnd: '#4B99CA',
+  headerStart: '#2B3C86',
+  headerEnd: '#2E9CD6',
   navy: "#1A3050",
   white: "#FFFFFF",
   bg: "#F7F9FC", 
@@ -320,8 +320,9 @@ function ElderProfileScreen() {
                 <Switch
                   value={remindMeds}
                   onValueChange={(v) => toggle('remindMeds', v, setRemindMedsState)}
-                  trackColor={{ false: '#DDE3EC', true: C.blue }}
-                  thumbColor={C.white}
+                  trackColor={{ false: '#D1D5DB', true: '#5BB5A2' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="#D1D5DB"
                 />
               </View>
               <View style={s.subRow}>
@@ -329,8 +330,9 @@ function ElderProfileScreen() {
                 <Switch
                   value={remindCheckin}
                   onValueChange={(v) => toggle('remindCheckin', v, setRemindCheckinState)}
-                  trackColor={{ false: '#DDE3EC', true: C.blue }}
-                  thumbColor={C.white}
+                  trackColor={{ false: '#D1D5DB', true: '#5BB5A2' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="#D1D5DB"
                 />
               </View>
               <View style={s.subRow}>
@@ -338,8 +340,9 @@ function ElderProfileScreen() {
                 <Switch
                   value={remindGames}
                   onValueChange={(v) => toggle('remindGames', v, setRemindGamesState)}
-                  trackColor={{ false: '#DDE3EC', true: C.blue }}
-                  thumbColor={C.white}
+                  trackColor={{ false: '#D1D5DB', true: '#5BB5A2' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="#D1D5DB"
                 />
               </View>
             </View>
@@ -613,7 +616,7 @@ const RAW_STYLES = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingBottom: 64 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.0)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
-  headerTitle: { color: C.white, fontSize: 18, fontWeight: '800' },
+  headerTitle: { color: C.white, fontSize: 22, fontWeight: '800' },
   scrollSheet: {
     flex: 1,
     marginTop: -42,
@@ -661,7 +664,7 @@ const RAW_STYLES = StyleSheet.create({
   statDivider: { width: 1, height: 28, backgroundColor: '#E6EBF2' },
 
   sectionHeaderRow: { marginHorizontal: 16, marginTop: 24, marginBottom: 12 },
-  sectionTitle: { fontSize: 15, fontWeight: "900", color: C.text },
+  sectionTitle: { fontSize: 18, fontWeight: "900", color: C.text },
 
 
   languageScroll: { paddingHorizontal: 16, paddingBottom: 4 },

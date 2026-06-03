@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
-  useAudioRecorder, useAudioPlayer,
+  useAudioRecorder, useAudioPlayer, useAudioPlayerStatus,
   RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync,
 } from 'expo-audio';
 
@@ -158,6 +158,14 @@ function MemoCard({
     [memo.media_url],
   );
   const player = useAudioPlayer(src);
+  const status = useAudioPlayerStatus(player);
+
+  // Auto-reset when playing finishes
+  useEffect(() => {
+    if (status.didJustFinish && isPlaying) {
+      onStop();
+    }
+  }, [status.didJustFinish, isPlaying]);
 
   // Sync play/pause with parent's playingId
   useEffect(() => {
@@ -613,7 +621,7 @@ export default function FamilyMessagesScreen() {
     clearInterval(recTimerRef.current!);
     setIsRec(false); setRecSecs(0);
     try { await recorder.stop(); } catch {}
-    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
   };
 
   const sendNote = async () => {
@@ -661,7 +669,7 @@ export default function FamilyMessagesScreen() {
     setSending(true);
     try {
       await recorder.stop();
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       const uri = recorder.uri;
       if (!uri) throw new Error('No recording URI');
       const url = await uploadAudio(uri, user!.id);

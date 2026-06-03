@@ -118,7 +118,7 @@ export default function TalkToSathiModal({ visible, onClose, userName, context }
     if (isRecording) {
       setIsRecording(false);
       await recorder.stop();
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
 
       const uri = recorder.uri;
       if (!uri) { setStatus('idle'); return; }
@@ -181,7 +181,7 @@ export default function TalkToSathiModal({ visible, onClose, userName, context }
     if (isRecording) {
       recorder.stop().catch(() => {});
       setIsRecording(false);
-      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
     }
     setStatus('idle');
     setMessages([]);

@@ -87,7 +87,7 @@ export default function DailyCheckInScreen() {
     if (isRecording) {
       try {
         await recorder.stop();
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
         setIsRecording(false);
         const uri = recorder.uri;
         if (uri) setVoiceUri(uri);
@@ -175,21 +175,23 @@ export default function DailyCheckInScreen() {
       <View style={[s.root, { backgroundColor: themeColors.bg }]}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
         <LinearGradient
-          colors={["#1B3A5C", "#2B7FC0"]}
+          colors={["#2B3C86", "#2E9CD6"]}
           style={[s.header, { paddingTop: insets.top + 12 }]}
         >
           <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.backBtn}>
-            <Ionicons name="chevron-back" size={20} color={C.navyDark} />
+            <Ionicons name="chevron-back" size={20} color={C.white} />
           </Pressable>
           <Text style={s.headerTitle}>{t.dailyCheckIn}</Text>
         </LinearGradient>
-        <View style={s.doneBanner}>
-          <Ionicons name="checkmark-circle" size={64} color="#22C55E" />
-          <Text style={s.doneTitle}>{t.allDoneToday}</Text>
-          <Text style={s.doneSub}>{t.alreadyCheckedIn}</Text>
-          <Pressable style={s.doneBtn} onPress={() => router.replace("/(tabs)")}>
-            <Text style={s.doneBtnText}>{t.backToHome}</Text>
-          </Pressable>
+        <View style={[s.scrollSheet, { backgroundColor: themeColors.bg }]}>
+          <View style={s.doneBanner}>
+            <Ionicons name="checkmark-circle" size={64} color="#22C55E" />
+            <Text style={s.doneTitle}>{t.allDoneToday}</Text>
+            <Text style={s.doneSub}>{t.alreadyCheckedIn}</Text>
+            <Pressable style={s.doneBtn} onPress={() => router.replace("/(tabs)")}>
+              <Text style={s.doneBtnText}>{t.backToHome}</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     );
@@ -200,16 +202,17 @@ export default function DailyCheckInScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       <LinearGradient
-        colors={["#1B3A5C", "#2B7FC0"]}
+        colors={["#2B3C86", "#2E9CD6"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[s.header, { paddingTop: insets.top + 12 }]}
       >
         <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.backBtn}>
-          <Ionicons name="chevron-back" size={20} color={C.navyDark} />
+          <Ionicons name="chevron-back" size={20} color={C.white} />
         </Pressable>
         <Text style={s.headerTitle}>{t.dailyCheckIn}</Text>
       </LinearGradient>
 
+      <View style={[s.scrollSheet, { backgroundColor: themeColors.bg }]}>
       <ScrollView
         contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
@@ -329,15 +332,17 @@ export default function DailyCheckInScreen() {
           <Text style={s.submitText}>{saving ? t.saving : t.completeCheckIn}</Text>
         </Pressable>
       </ScrollView>
+      </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingBottom: 18, gap: 14 },
-  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.white, justifyContent: "center", alignItems: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "800", color: C.white },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingBottom: 50, gap: 14 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.15)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", justifyContent: "center", alignItems: "center" },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: C.white },
+  scrollSheet: { flex: 1, marginTop: -28, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" },
   scroll: { paddingTop: 16 },
 
   // Already done

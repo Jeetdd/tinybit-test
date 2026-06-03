@@ -233,7 +233,7 @@ export default function CalorieCalculatorScreen() {
 
       {/* ── Header ── */}
       <LinearGradient
-        colors={["#14532D", "#16A34A"]}
+        colors={["#2B3C86", "#2E9CD6"]}
         style={[s.header, { paddingTop: insets.top + 16 }]}
       >
         <Pressable style={s.backBtn} onPress={() => router.back()}>
@@ -246,6 +246,7 @@ export default function CalorieCalculatorScreen() {
         <View style={{ width: 40 }} />
       </LinearGradient>
 
+      <View style={s.scrollSheet}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 100 }]}
@@ -486,6 +487,7 @@ export default function CalorieCalculatorScreen() {
           </>
         )}
       </ScrollView>
+      </View>
     </View>
   );
 }
@@ -493,14 +495,15 @@ export default function CalorieCalculatorScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
 
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 24 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 50 },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center" },
   headerCenter: { flex: 1, alignItems: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "900", color: "#fff" },
+  headerTitle: { fontSize: 22, fontWeight: "900", color: "#fff" },
   headerSub: { fontSize: 12, color: "rgba(255,255,255,0.8)", fontWeight: "600", marginTop: 2 },
+  scrollSheet: { flex: 1, marginTop: -28, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", backgroundColor: "#F8FAFC" },
 
   content: { paddingHorizontal: 16, paddingTop: 16 },
-  sectionTitle: { fontSize: 17, fontWeight: "900", color: "#1E293B", marginBottom: 12, marginTop: 6 },
+  sectionTitle: { fontSize: 18, fontWeight: "900", color: "#1E293B", marginBottom: 12, marginTop: 6 },
 
   // Dashboard
   dashCard: { backgroundColor: "#fff", borderRadius: 22, padding: 20, marginBottom: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },

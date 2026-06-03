@@ -34,11 +34,13 @@ import { tr } from "../../constants/appTranslations";
 import { getCountryEmergency } from "../../constants/emergencyNumbers";
 import CountryPickerModal from "../../components/CountryPickerModal";
 import type { Country } from "../../constants/countries";
+import { supabase } from "../../utils/supabase";
+import { notifyGuardiansOf } from "../../services/notifications";
 
 
 const C = {
-  headerStart: "#2E4A78",
-  headerEnd: "#4A9BC8",
+  headerStart: "#2B3C86",
+  headerEnd: "#2E9CD6",
   bg: "#F0F3F8",
   white: "#FFFFFF",
   text: "#15253E",
@@ -63,7 +65,7 @@ interface EmergencyContact {
 export default function SOSScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { colors: themeColors, language } = useLanguage();
   const t = tr(language);
 
@@ -100,6 +102,30 @@ export default function SOSScreen() {
   const [dialCode, setDialCode] = useState("+91");
   const [showDialPicker, setShowDialPicker] = useState(false);
 
+  // Load persisted emergency contacts from Supabase
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('emergency_contacts')
+      .select('id, name, role, phone, color')
+      .eq('user_id', user!.id)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        if (data) {
+          setContacts(
+            data.map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              role: r.role,
+              phone: r.phone,
+              color: r.color,
+              initials: r.name.substring(0, 1).toUpperCase(),
+            }))
+          );
+        }
+      });
+  }, [user?.id]);
+
   const openAddModal = () => {
     setEditingIndex(null);
     setEditingContact({ name: "", role: "", initials: "", color: "#F0F4FF", phone: "" });
@@ -113,7 +139,7 @@ export default function SOSScreen() {
     setIsEditModalVisible(true);
   };
 
-  const handleSaveContact = () => {
+  const handleSaveContact = async () => {
     if (!editingContact.name || !editingContact.phone) return;
     const digits = editingContact.phone.trim().replace(/\D/g, '');
     if (digits.length < 6) {
@@ -123,26 +149,53 @@ export default function SOSScreen() {
     const initials = editingContact.name.substring(0, 1).toUpperCase();
     const rawPhone = editingContact.phone.trim();
     const fullPhone = rawPhone.startsWith('+') ? rawPhone : `${dialCode}${rawPhone}`;
-    const saved = { ...editingContact, phone: fullPhone, initials };
-    if (editingIndex !== null) {
+    const payload = {
+      user_id: user!.id,
+      name: editingContact.name.trim(),
+      role: editingContact.role.trim(),
+      phone: fullPhone,
+      color: editingContact.color || '#F0F4FF',
+    };
+
+    if (editingIndex !== null && editingContact.id) {
+      // Update existing
+      const { error } = await supabase
+        .from('emergency_contacts')
+        .update({ name: payload.name, role: payload.role, phone: payload.phone, color: payload.color })
+        .eq('id', editingContact.id);
+      if (error) { Alert.alert('Error', 'Could not update contact.'); return; }
       const c = [...contacts];
-      c[editingIndex] = saved;
+      c[editingIndex] = { ...editingContact, phone: fullPhone, initials };
       setContacts(c);
     } else {
-      setContacts([...contacts, { ...saved, id: Math.random().toString() }]);
+      // Insert new
+      const { data, error } = await supabase
+        .from('emergency_contacts')
+        .insert(payload)
+        .select('id')
+        .single();
+      if (error) { Alert.alert('Error', 'Could not save contact.'); return; }
+      setContacts([...contacts, { ...payload, id: data.id, initials }]);
     }
     setIsEditModalVisible(false);
     setEditingIndex(null);
   };
 
-  const handleDeleteContact = () => {
-    if (editingIndex !== null) {
-      const c = [...contacts];
-      c.splice(editingIndex, 1);
-      setContacts(c);
-      setIsEditModalVisible(false);
-      setEditingIndex(null);
+  const handleDeleteContact = async () => {
+    if (editingIndex === null) return;
+    const contact = contacts[editingIndex];
+    if (contact.id) {
+      const { error } = await supabase
+        .from('emergency_contacts')
+        .delete()
+        .eq('id', contact.id);
+      if (error) { Alert.alert('Error', 'Could not delete contact.'); return; }
     }
+    const c = [...contacts];
+    c.splice(editingIndex, 1);
+    setContacts(c);
+    setIsEditModalVisible(false);
+    setEditingIndex(null);
   };
 
   // Pulse rings animation
@@ -164,11 +217,24 @@ export default function SOSScreen() {
     opacity: interpolate(progressPulse.value, [0, 1], [0.05, 0.35]),
   }));
 
-  const activateSOS = () => {
+  const activateSOS = async () => {
     if (isCalled) return;
     setIsCalled(true);
     setIsActivating(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    if (!user?.id) return;
+    // Log the alert
+    await supabase.from('sos_alerts').insert({ user_id: user.id });
+    // Notify all connected guardians
+    const name = profile?.fullName || profile?.firstName || 'Your elder';
+    await notifyGuardiansOf(
+      user.id,
+      user.id,
+      'sos_triggered',
+      `🆘 SOS Alert — ${name}`,
+      `${name} has triggered an emergency SOS. Please check on them immediately.`,
+    );
   };
 
   const handlePressIn = () => {
@@ -546,7 +612,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: C.white,
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: "800",
     letterSpacing: 0.2,
   },
@@ -652,7 +718,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "800",
     color: C.text,
   },
@@ -673,7 +739,7 @@ const styles = StyleSheet.create({
   // ── Contacts Card ─────────────────────────────────────────────
   contactsCard: {
     backgroundColor: C.white,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: C.cardBorder,
@@ -768,7 +834,7 @@ const styles = StyleSheet.create({
   // ── Feature Cards ─────────────────────────────────────────────
   featureCard: {
     backgroundColor: C.white,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 18,
     paddingVertical: 16,
     borderWidth: 1,
@@ -905,7 +971,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   saveBtn: {
-    backgroundColor: C.blue,
+    backgroundColor: "#2B3C86",
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: "center",

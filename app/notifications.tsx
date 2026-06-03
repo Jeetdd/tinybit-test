@@ -154,7 +154,7 @@ export default function NotificationsScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       <LinearGradient
-        colors={['#1B3A5C', '#2B7FC0']}
+        colors={['#2B3C86', '#2E9CD6']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[s.header, { paddingTop: insets.top + 12 }]}
       >
@@ -162,7 +162,7 @@ export default function NotificationsScreen() {
           onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
           style={s.backBtn}
         >
-          <Ionicons name="chevron-back" size={20} color="#1B3A5C" />
+          <Ionicons name="chevron-back" size={20} color="#fff" />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>Notifications</Text>
@@ -184,41 +184,43 @@ export default function NotificationsScreen() {
         </View>
       </LinearGradient>
 
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 48 }} size="large" color="#2B7FC0" />
-      ) : notifs.length === 0 ? (
-        <View style={s.empty}>
-          <View style={s.emptyIcon}>
-            <Ionicons name="notifications-off-outline" size={44} color="#94A3B8" />
+      <View style={s.scrollSheet}>
+        {loading ? (
+          <ActivityIndicator style={{ marginTop: 48 }} size="large" color="#2E9CD6" />
+        ) : notifs.length === 0 ? (
+          <View style={s.empty}>
+            <View style={s.emptyIcon}>
+              <Ionicons name="notifications-off-outline" size={44} color="#94A3B8" />
+            </View>
+            <Text style={s.emptyTitle}>All caught up!</Text>
+            <Text style={s.emptySub}>
+              No notifications yet. Activity from you and your family will appear here in real time.
+            </Text>
           </View>
-          <Text style={s.emptyTitle}>All caught up!</Text>
-          <Text style={s.emptySub}>
-            No notifications yet. Activity from you and your family will appear here in real time.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 24 }]}
-        >
-          {today.length > 0 && (
-            <>
-              <Text style={s.groupLabel}>Today</Text>
-              {today.map(n => (
-                <NotifRow key={n.id} n={n} onRead={markRead} onDelete={deleteNotif} />
-              ))}
-            </>
-          )}
-          {earlier.length > 0 && (
-            <>
-              <Text style={s.groupLabel}>Earlier</Text>
-              {earlier.map(n => (
-                <NotifRow key={n.id} n={n} onRead={markRead} onDelete={deleteNotif} />
-              ))}
-            </>
-          )}
-        </ScrollView>
-      )}
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 24 }]}
+          >
+            {today.length > 0 && (
+              <>
+                <Text style={s.groupLabel}>Today</Text>
+                {today.map(n => (
+                  <NotifRow key={n.id} n={n} onRead={markRead} onDelete={deleteNotif} />
+                ))}
+              </>
+            )}
+            {earlier.length > 0 && (
+              <>
+                <Text style={s.groupLabel}>Earlier</Text>
+                {earlier.map(n => (
+                  <NotifRow key={n.id} n={n} onRead={markRead} onDelete={deleteNotif} />
+                ))}
+              </>
+            )}
+          </ScrollView>
+        )}
+      </View>
     </View>
   );
 }
@@ -268,13 +270,15 @@ const s = StyleSheet.create({
 
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 18, paddingBottom: 18, gap: 14,
+    paddingHorizontal: 18, paddingBottom: 50, gap: 14,
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  headerTitle:   { fontSize: 20, fontWeight: '900', color: '#fff' },
+  headerTitle:   { fontSize: 22, fontWeight: '900', color: '#fff' },
+  scrollSheet:   { flex: 1, marginTop: -28, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', backgroundColor: '#EEF2F7' },
   headerSub:     { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.7)', marginTop: 1 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerBtn: {

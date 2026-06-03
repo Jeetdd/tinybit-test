@@ -1120,7 +1120,7 @@ export default function HealthLogScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* ── Header ── */}
-      <LinearGradient colors={['#1E3A5F', '#2B7FC0']} style={[s.header, { paddingTop: insets.top + 10 }]}>
+      <LinearGradient colors={['#2B3C86', '#2E9CD6']} style={[s.header, { paddingTop: insets.top + 10 }]}>
         <View style={s.headerRow}>
           <Pressable style={s.backBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -1144,6 +1144,7 @@ export default function HealthLogScreen() {
         </View>
       </LinearGradient>
 
+      <View style={s.scrollSheet}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.body, { paddingBottom: insets.bottom + 90 }]}>
 
         {/* ── Main 8 cards ── */}
@@ -1219,6 +1220,7 @@ export default function HealthLogScreen() {
           </View>
         )}
       </ScrollView>
+      </View>
 
       {/* ── All Modals ── */}
       {renderMedicineModal()}
@@ -1239,9 +1241,10 @@ export default function HealthLogScreen() {
 // ── Main screen styles ─────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container:   { flex: 1, backgroundColor: '#F0F4F8' },
-  header:      { paddingHorizontal: 16, paddingBottom: 20 },
+  scrollSheet: { flex: 1, marginTop: -28, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', backgroundColor: '#F0F4F8' },
+  header:      { paddingHorizontal: 16, paddingBottom: 50 },
   headerRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  headerTitle: { fontSize: 20, fontWeight: '900', color: '#fff' },
+  headerTitle: { fontSize: 22, fontWeight: '900', color: '#fff' },
   headerDate:  { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginTop: 2 },
   backBtn:     { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
 
@@ -1286,14 +1289,14 @@ const s = StyleSheet.create({
 
 // ── Modal styles ───────────────────────────────────────────────────────────────
 const m = StyleSheet.create({
-  sheet:  { flex: 1, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  sheet:  { flex: 1, backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28 },
   handle: { width: 40, height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
   head:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   headTitle: { fontSize: 20, fontWeight: '900', color: '#1E293B' },
   body:      { flex: 1, paddingHorizontal: 20, paddingTop: 18 },
   label:     { fontSize: 14, fontWeight: '800', color: '#64748B', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  saveBtn:    { backgroundColor: '#1E3A5F', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 },
+  saveBtn:    { backgroundColor: '#2B3C86', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 },
   saveBtnOff: { backgroundColor: '#CBD5E1' },
   saveBtnTxt: { color: '#fff', fontSize: 16, fontWeight: '900' },
 

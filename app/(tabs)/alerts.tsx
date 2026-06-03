@@ -227,7 +227,9 @@ export default function GuardianAlertsScreen() {
                   <Switch
                     value={prefs[pref.key]}
                     onValueChange={v => setPrefs(p => ({ ...p, [pref.key]: v }))}
-                    trackColor={{ false: G.border, true: G.accent }}
+                    trackColor={{ false: '#D1D5DB', true: '#5BB5A2' }}
+                    thumbColor="#FFFFFF"
+                    ios_backgroundColor="#D1D5DB"
                   />
                 </View>
                 {i < arr.length - 1 && <View style={s.divider} />}

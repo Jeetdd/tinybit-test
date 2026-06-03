@@ -171,7 +171,7 @@ export default function TinyAIScreen() {
       if (isRecording) {
         setIsRecording(false);
         await recorder.stop();
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
         const uri = recorder.uri;
         if (!uri) return;
         setIsTyping(true);
@@ -304,7 +304,7 @@ export default function TinyAIScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       <LinearGradient
-        colors={["#1B3A5C", "#2B7FC0"]}
+        colors={["#2B3C86", "#2E9CD6"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[s.chatHeader, { paddingTop: insets.top + 12 }]}
       >
@@ -454,7 +454,7 @@ const RAW_STYLES = StyleSheet.create({
   },
   chatHeaderLeft: { flexDirection: "row", alignItems: "center" },
   headerMascot:   { width: 46, height: 46 },
-  headerTitle:    { fontSize: 17, fontWeight: "900", color: C.white },
+  headerTitle:    { fontSize: 20, fontWeight: "900", color: C.white },
   headerSub:      { fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.70)", marginTop: 2 },
   headerIconBtn: {
     width: 36, height: 36, borderRadius: 18,

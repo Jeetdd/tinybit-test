@@ -155,7 +155,7 @@ const C = {
   success: "#4CAF50",
   warning: "#FFB300",
   accent: "#37B1E6",
-  headerGradient: ['#333372', '#36B0E6'] as [string, string],
+  headerGradient: ['#2B3C86', '#2E9CD6'] as [string, string],
   cardShadow: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -867,15 +867,13 @@ const RAW_STYLES = StyleSheet.create({
     flex: 1,
     marginTop: -28,
     backgroundColor: C.bg,
-    borderTopLeftRadius: 5,
-    borderTopRightRadius: 5,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     overflow: 'hidden',
   },
   headerGradient: {
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 48,
   },
   headerTop: {
     flexDirection: 'row',

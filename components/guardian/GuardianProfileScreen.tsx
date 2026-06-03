@@ -258,6 +258,9 @@ export default function GuardianProfileScreen() {
                 <Switch
                   value={(prefs as any)[row.key]}
                   onValueChange={v => setPrefs(p => ({ ...p, [row.key]: v }))}
+                  trackColor={{ false: '#D1D5DB', true: '#5BB5A2' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="#D1D5DB"
                 />
               </View>
             ))}

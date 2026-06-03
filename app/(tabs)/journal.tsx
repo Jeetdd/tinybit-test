@@ -21,9 +21,19 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
-import { requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets, useAudioRecorder } from "expo-audio";
+import { requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets, useAudioRecorder, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../utils/supabase";
+
+async function uploadJournalAudio(uri: string, userId: string): Promise<string> {
+  const buf  = await (await fetch(uri)).arrayBuffer();
+  const path = `${userId}/${Date.now()}.m4a`;
+  const { error } = await supabase.storage
+    .from('journal-audio')
+    .upload(path, buf, { contentType: 'audio/m4a' });
+  if (error) throw error;
+  return supabase.storage.from('journal-audio').getPublicUrl(path).data.publicUrl;
+}
 import { useLanguage } from "../../context/LanguageContext";
 import type { Language } from "../../context/LanguageContext";
 import { scaleStyles } from "../../utils/scaleStyles";
@@ -106,12 +116,101 @@ function startOfWeek(date: Date) {
 function dateForWeekday(base: Date, weekday: DayOfWeek) {
   const s = startOfWeek(base);
   const d = new Date(s);
-  d.setDate(s.getDate() + weekday);
+  // Sunday (0) is the END of the Mon–Sun week, so it sits 7 days after the previous Sunday
+  d.setDate(s.getDate() + (weekday === 0 ? 7 : weekday));
   return d;
 }
 
 function formatWeekdayLabel(weekday: DayOfWeek) {
   return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][weekday];
+}
+
+function MemoryCard({
+  memory,
+  playingId,
+  onPlay,
+  onStop,
+  themeColors,
+  s,
+}: {
+  memory: any;
+  playingId: string | number | null;
+  onPlay: (id: string | number) => void;
+  onStop: () => void;
+  themeColors: any;
+  s: any;
+}) {
+  const isPlaying = playingId === memory.id;
+  const src = useMemo(
+    () => (memory.audio_uri ? { uri: memory.audio_uri } : { uri: '' }),
+    [memory.audio_uri]
+  );
+  const player = useAudioPlayer(src);
+  const status = useAudioPlayerStatus(player);
+
+  useEffect(() => {
+    if (status.didJustFinish && isPlaying) {
+      onStop();
+    }
+  }, [status.didJustFinish, isPlaying]);
+
+  useEffect(() => {
+    if (!memory.audio_uri) return;
+    try {
+      if (isPlaying) {
+        player.seekTo(0);
+        player.play();
+      } else {
+        player.pause();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [isPlaying]);
+
+  const toggle = async () => {
+    if (memory.type !== "Voice" || !memory.audio_uri) return;
+    try {
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      if (isPlaying) {
+        onStop();
+      } else {
+        onPlay(memory.id);
+      }
+    } catch (e: any) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <Pressable
+      onPress={toggle}
+      style={[
+        s.memoryCard,
+        { backgroundColor: themeColors.card, borderColor: themeColors.border },
+        isPlaying && { backgroundColor: '#F0FAFA' }
+      ]}
+    >
+      <View style={s.memoryCardTop}>
+        <Text style={[s.memoryDate, { color: themeColors.muted }]}>
+          {new Date(memory.created_at).toLocaleDateString()}
+        </Text>
+        {memory.type === "Voice" ? (
+          <View style={[s.playBtn, isPlaying && s.playBtnStop]}>
+            <Ionicons name={isPlaying ? "stop" : "play"} size={12} color="#fff" />
+            <Text style={s.playBtnText}>{isPlaying ? "Stop" : "Play"}</Text>
+          </View>
+        ) : (
+          <View style={s.badgeWritten}>
+            <Text style={s.badgeWrittenText}>Written ✍️</Text>
+          </View>
+        )}
+      </View>
+      <Text style={[s.memoryText, { color: themeColors.text }]} numberOfLines={2}>
+        {memory.content}
+      </Text>
+    </Pressable>
+  );
 }
 
 export default function JournalScreen() {
@@ -123,11 +222,13 @@ export default function JournalScreen() {
   const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
 
   const [memories, setMemories] = useState<any[]>([]);
+  const [journaledDates, setJournaledDates] = useState<Set<string>>(new Set());
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [isWriteModalVisible, setIsWriteModalVisible] = useState(false);
   const [inputText, setInputText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [playingId, setPlayingId] = useState<string | number | null>(null);
 
   const todaysPrompt = useMemo(() => getTodaysMemoryPrompt(), []);
 
@@ -136,12 +237,13 @@ export default function JournalScreen() {
     return [1, 2, 3, 4, 5, 6, 0].map((id) => {
       const dayId = id as DayOfWeek;
       const d = dateForWeekday(base, dayId);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
       return {
         id: dayId, label: formatWeekdayLabel(dayId), date: d.getDate(),
-        done: id === 1 || id === 2 || id === 3
+        done: journaledDates.has(key),
       };
     });
-  }, []);
+  }, [journaledDates]);
 
   useEffect(() => {
     if (user) loadMemories();
@@ -149,10 +251,20 @@ export default function JournalScreen() {
 
   const loadMemories = async () => {
     try {
+      const weekStart = startOfWeek(new Date()).toISOString();
       const { data, error } = await supabase
         .from('journal').select('*').eq('user_id', user?.id).order('created_at', { ascending: false });
       if (error && error.code !== 'PGRST205') throw error;
-      setMemories(data || []);
+      const rows = data || [];
+      setMemories(rows);
+      const datesThisWeek = new Set<string>();
+      rows.forEach((m) => {
+        const d = new Date(m.created_at);
+        if (d >= new Date(weekStart)) {
+          datesThisWeek.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+        }
+      });
+      setJournaledDates(datesThisWeek);
     } catch (e) { console.error(e); }
   };
 
@@ -161,7 +273,7 @@ export default function JournalScreen() {
       // ── Stop ──
       try {
         await recorder.stop();
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
         setIsRecording(false);
         const uri = recorder.uri;
         if (uri) {
@@ -194,8 +306,12 @@ export default function JournalScreen() {
     if (!user) return;
     setSaving(true);
     try {
+      let audioUrl: string | undefined;
+      if (uri) {
+        audioUrl = await uploadJournalAudio(uri, user.id);
+      }
       const { error } = await supabase.from('journal').insert({
-        user_id: user.id, type, content, audio_uri: uri, prompt: todaysPrompt,
+        user_id: user.id, type, content, audio_uri: audioUrl, prompt: todaysPrompt,
       });
       if (error) throw error;
       Alert.alert("Saved! 🎉", "Your memory has been shared with family.");
@@ -234,7 +350,7 @@ export default function JournalScreen() {
           <View style={[s.topCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
             <Text style={[s.topCardSubtitle, { color: themeColors.text }]} allowFontScaling={false}>{jt.yourLifeStory}</Text>
             <Text style={s.topCardTitle} allowFontScaling={false}>{jt.memoryJournal}</Text>
-            <Text style={[s.topCardDesc, { color: themeColors.muted }]} allowFontScaling={false}>{jt.memoriesShared}</Text>
+            <Text style={[s.topCardDesc, { color: themeColors.muted }]} allowFontScaling={false}>{memories.length} {jt.memoriesShared}</Text>
             <Text style={[s.streakTitle, { color: themeColors.text }]} allowFontScaling={false}>{streak} {jt.dayStreak}</Text>
             <View style={s.streakDays}>
               {weekDays.map((d) => (
@@ -281,15 +397,21 @@ export default function JournalScreen() {
             <Text style={s.sectionAction} allowFontScaling={false} onPress={() => router.push("/memory-history")}>{jt.viewAll}</Text>
           </View>
           <View style={s.memoriesList}>
-            {memories.length === 0 ? <Text style={{ textAlign: 'center', color: themeColors.muted, margin: 20 }}>No memories yet.</Text> : memories.slice(0, 4).map((m, i) => (
-              <View key={m.id || i} style={[s.memoryCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
-                <View style={s.memoryCardTop}>
-                  <Text style={[s.memoryDate, { color: themeColors.muted }]}>{new Date(m.created_at).toLocaleDateString()}</Text>
-                  <View style={s.playBtn}><Text style={s.playBtnText}>{m.type === "Voice" ? "▶ Play" : "📖 Read"}</Text></View>
-                </View>
-                <Text style={[s.memoryText, { color: themeColors.text }]} numberOfLines={2}>{m.content}</Text>
-              </View>
-            ))}
+            {memories.length === 0 ? (
+              <Text style={{ textAlign: 'center', color: themeColors.muted, margin: 20 }}>No memories yet.</Text>
+            ) : (
+              memories.slice(0, 4).map((m, i) => (
+                <MemoryCard
+                  key={m.id || i}
+                  memory={m}
+                  playingId={playingId}
+                  onPlay={setPlayingId}
+                  onStop={() => setPlayingId(null)}
+                  themeColors={themeColors}
+                  s={s}
+                />
+              ))
+            )}
           </View>
 
           <View style={[s.sectionHeaderRow, { marginTop: 10 }]}><Text style={[s.sectionTitle, { color: themeColors.text }]}>{jt.createMemory}</Text></View>
@@ -342,10 +464,15 @@ const RAW_STYLES = StyleSheet.create({
   actionInner: { padding: 16, alignItems: 'center' }, actionCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   actionDesc: { fontSize: 12, color: '#7B8AA0', fontWeight: '600', textAlign: 'center' },
   memoriesList: { marginHorizontal: 16, gap: 12 },
-  memoryCard: { borderRadius: 16, borderWidth: 1, padding: 16 },
+  memoryCard: { borderRadius: 20, borderWidth: 1, padding: 16 },
   memoryCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  memoryDate: { fontSize: 12, fontWeight: '700' }, playBtn: { backgroundColor: '#3B82F6', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
-  playBtnText: { color: C.white, fontSize: 12, fontWeight: '800' }, memoryText: { fontSize: 16, fontWeight: '800' },
+  memoryDate: { fontSize: 12, fontWeight: '700' },
+  playBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  playBtnStop: { backgroundColor: '#E84545' },
+  playBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  badgeWritten: { backgroundColor: '#FFF3EB', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  badgeWrittenText: { color: '#DE8542', fontSize: 10, fontWeight: '800' },
+  memoryText: { fontSize: 16, fontWeight: '800' },
   bookCardRow: { flexDirection: 'row', alignItems: 'center' }, bookSubtitle: { fontSize: 14, fontWeight: '800' },
   bookTitle: { fontSize: 24, fontWeight: '900', color: '#2A79D8', marginTop: 4, marginBottom: 6 }, bookDesc: { fontSize: 12, fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },

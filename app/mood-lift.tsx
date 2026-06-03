@@ -188,16 +188,17 @@ export default function MoodLiftScreen() {
 
       {/* ── Header ── */}
       <LinearGradient
-        colors={["#1B3A5C", "#2B7FC0"]}
+        colors={["#2B3C86", "#2E9CD6"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[s.header, { paddingTop: insets.top + 12 }]}
       >
         <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="chevron-back" size={20} color={C.navyDark} />
+          <Ionicons name="chevron-back" size={20} color={C.white} />
         </Pressable>
         <Text style={s.headerTitle}>{t.moodLift}</Text>
       </LinearGradient>
 
+      <View style={s.scrollSheet}>
       <ScrollView
         contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
@@ -328,6 +329,7 @@ export default function MoodLiftScreen() {
           </Animated.View>
         ))}
       </ScrollView>
+      </View>
 
       {/* ── Mood note modal (all moods) ── */}
       <Modal visible={showNoteModal} transparent animationType="slide">
@@ -379,14 +381,16 @@ const s = StyleSheet.create({
 
   header: {
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 18, paddingBottom: 18, gap: 14,
+    paddingHorizontal: 18, paddingBottom: 50, gap: 14,
   },
   backBtn: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: C.white, justifyContent: "center", alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.15)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)",
+    justifyContent: "center", alignItems: "center",
   },
-  headerTitle: { fontSize: 20, fontWeight: "800", color: C.white },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: C.white },
 
+  scrollSheet: { flex: 1, marginTop: -28, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", backgroundColor: C.bg },
   scroll: { paddingTop: 16 },
 
   insCard: {

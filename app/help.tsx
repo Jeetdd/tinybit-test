@@ -163,7 +163,7 @@ export default function HelpScreen() {
 
       {/* ── Header ── */}
       <LinearGradient
-        colors={["#1E3A5F", "#2B7FC0"]}
+        colors={["#2B3C86", "#2E9CD6"]}
         style={[s.header, { paddingTop: insets.top + 16 }]}
       >
         <Pressable style={s.backBtn} onPress={() => router.back()}>
@@ -382,13 +382,13 @@ export default function HelpScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
 
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 28 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 50 },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center" },
   headerCenter: { flex: 1, alignItems: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "900", color: "#fff" },
+  headerTitle: { fontSize: 22, fontWeight: "900", color: "#fff" },
   headerSub: { fontSize: 12, color: "rgba(255,255,255,0.8)", fontWeight: "600", marginTop: 2 },
 
-  sheet: { flex: 1, marginTop: -20, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: "#F8FAFC", overflow: "hidden" },
+  sheet: { flex: 1, marginTop: -28, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: "#F8FAFC", overflow: "hidden" },
 
   searchContainer: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 4 },
   searchWrap: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
@@ -404,7 +404,7 @@ const s = StyleSheet.create({
 
   chipsRow: { flexDirection: "row", gap: 8 },
   chip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: "#fff", borderWidth: 1.5, borderColor: "#E2E8F0" },
-  chipActive: { backgroundColor: "#1E3A5F", borderColor: "#1E3A5F" },
+  chipActive: { backgroundColor: "#2B3C86", borderColor: "#2B3C86" },
   chipText: { fontSize: 12, fontWeight: "800", color: "#475569" },
   chipTextActive: { color: "#fff" },
 
@@ -443,7 +443,7 @@ const s = StyleSheet.create({
   supportEmoji: { fontSize: 36 },
   supportTitle: { fontSize: 18, fontWeight: "900", color: "#1E293B" },
   supportSub: { fontSize: 14, color: "#64748B", fontWeight: "600", textAlign: "center", lineHeight: 20 },
-  supportBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#1E3A5F", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20, marginTop: 8 },
+  supportBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#2B3C86", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20, marginTop: 8 },
   supportBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
 
   // Player modal

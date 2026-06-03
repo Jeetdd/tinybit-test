@@ -195,7 +195,7 @@ function ElderLocationView() {
               <Text style={s.cardSub}>{sharing ? 'Your family can see where you are' : 'Tap to start sharing with family'}</Text>
             </View>
             {toggling ? <ActivityIndicator color={G.accent} /> : (
-              <Switch value={sharing} onValueChange={handleToggle} trackColor={{ true: '#16A34A', false: '#D1D5DB' }} thumbColor="#fff" />
+              <Switch value={sharing} onValueChange={handleToggle} trackColor={{ false: '#D1D5DB', true: '#5BB5A2' }} thumbColor="#FFFFFF" ios_backgroundColor="#D1D5DB" />
             )}
           </View>
         </View>

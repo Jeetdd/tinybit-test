@@ -30,11 +30,11 @@ const PROFILE_SETUP_SCREENS = new Set([
 
 async function setupAudio() {
   try {
-    const { Audio } = require('expo-audio');
-    if (Audio && Audio.setAudioModeAsync) {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+    const { setAudioModeAsync } = require('expo-audio');
+    if (setAudioModeAsync) {
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
     }
   } catch (e) {

@@ -538,9 +538,9 @@ export default function WeatherScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F7FB" },
 
-  hero: { paddingHorizontal: 20, paddingBottom: 32 },
+  hero: { paddingHorizontal: 20, paddingBottom: 50, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
   heroNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
-  heroNavTitle: { fontSize: 18, fontWeight: "900", color: "#fff" },
+  heroNavTitle: { fontSize: 22, fontWeight: "900", color: "#fff" },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
 
   searchWrap: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, gap: 10, marginBottom: 24 },
@@ -574,9 +574,9 @@ const s = StyleSheet.create({
   sunLabel: { fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: "600" },
   sunDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.2)", marginVertical: 8 },
 
-  body: { paddingHorizontal: 16, marginTop: -16 },
+  body: { paddingHorizontal: 16, paddingTop: 24, marginTop: -24, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: "#F4F7FB" },
   sectionCard: { backgroundColor: "#fff", borderRadius: 20, padding: 18, marginBottom: 14, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  sectionTitle: { fontSize: 17, fontWeight: "900", color: "#1E293B", marginBottom: 14 },
+  sectionTitle: { fontSize: 18, fontWeight: "900", color: "#1E293B", marginBottom: 14 },
 
   hourlyRow: { flexDirection: "row", gap: 16 },
   hourlyItem: { alignItems: "center", gap: 6, minWidth: 60 },

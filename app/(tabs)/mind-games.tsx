@@ -213,10 +213,11 @@ export default function MindGamesScreen() {
   return (
     <View style={[s.root, { backgroundColor: themeColors.bg }]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <LinearGradient colors={["#1B3A5C", "#2B7FC0"]} style={[s.header, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.backBtn}><Ionicons name="chevron-back" size={20} color={C.navyDark} /></Pressable>
+      <LinearGradient colors={["#2B3C86", "#2E9CD6"]} style={[s.header, { paddingTop: insets.top + 12 }]}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.backBtn}><Ionicons name="chevron-back" size={20} color={C.white} /></Pressable>
         <Text style={s.headerTitle}>{t.mindGames}</Text>
       </LinearGradient>
+      <View style={[s.scrollSheet, { backgroundColor: themeColors.bg }]}>
       <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: 120 }]} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.delay(80)} style={[s.card, { backgroundColor: themeColors.card }]}>
           <Text style={[s.cardLabel, { color: themeColors.muted }]}>{t.yourBrainHealth}</Text>
@@ -280,6 +281,7 @@ export default function MindGamesScreen() {
           }
         </Animated.View>
       </ScrollView>
+      </View>
       {activeGame === "number_memory" && <NumberMemoryGame onClose={() => setActiveGame(null)} onWin={(s: number) => saveScore("number_memory", s)} />}
       {activeGame === "word_match" && <WordMatchGame onClose={() => setActiveGame(null)} onWin={(s: number) => saveScore("word_match", s)} />}
       {activeGame === "color_recall" && <ColorRecallGame onClose={() => setActiveGame(null)} onWin={(s: number) => saveScore("color_recall", s)} />}
@@ -703,9 +705,10 @@ function Stat({ n, label }: any) {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingBottom: 18, gap: 14 },
-  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.white, justifyContent: "center", alignItems: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "800", color: C.white },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingBottom: 50, gap: 14 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.15)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", justifyContent: "center", alignItems: "center" },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: C.white },
+  scrollSheet: { flex: 1, marginTop: -28, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" },
   scroll: { paddingTop: 16 },
   card: { backgroundColor: C.white, marginHorizontal: 16, marginBottom: 20, borderRadius: 22, padding: 20, elevation: 3 },
   cardLabel: { fontSize: 13, fontWeight: "600", color: C.muted },
