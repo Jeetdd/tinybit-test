@@ -1,8 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../utils/supabase";
 import {
-  Animated as RNAnimated,
   View, Text, StyleSheet, ScrollView, Pressable,
   StatusBar, useWindowDimensions, Image, Modal,
   TextInput, TouchableOpacity, KeyboardAvoidingView, Alert, Platform,
@@ -111,7 +110,7 @@ export default function MoodLiftScreen() {
   const { width } = useWindowDimensions();
 
   const { user } = useAuth();
-  const { colors: themeColors, language } = useLanguage();
+  const { language } = useLanguage();
   const t = tr(language);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [savedMood,    setSavedMood]    = useState<string | null>(null);

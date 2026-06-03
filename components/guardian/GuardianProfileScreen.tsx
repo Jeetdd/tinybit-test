@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Alert, Linking, StatusBar, StyleSheet, Text, View, ScrollView, Pressable, Switch } from 'react-native';
+import { ActivityIndicator, Alert, StatusBar, StyleSheet, Text, View, ScrollView, Pressable, Switch } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { GuardianHeader } from './GuardianHeader';

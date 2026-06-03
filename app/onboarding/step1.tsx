@@ -25,7 +25,6 @@ type CircleConfig = {
   image: any;
 };
 
-const ORBIT_ITEM_SIZE = 86;
 const circlesConfig = [
   { id: 1, angle: 0, radius: 160, size: 90, delay: 0, image: require('../../assets/images/197753842_10874897 (1)-Photoroom 2.png') },
   { id: 2, angle: 45, radius: 155, size: 85, delay: 100, image: require('../../assets/images/30933019_7719574-Photoroom 2.png') },

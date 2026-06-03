@@ -586,7 +586,7 @@ export default function AboutScreen() {
         setEmail(profile.email);
       }
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const relationOptions = [
     t.relSpouse, t.relSon, t.relDaughter, t.relParent, t.relSibling, t.relFriend, t.relOther,

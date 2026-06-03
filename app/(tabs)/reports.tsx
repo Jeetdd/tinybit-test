@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   ActivityIndicator, Modal, Platform, Pressable, ScrollView, StatusBar,
-  StyleSheet, Text, TextInput, TouchableOpacity, View, Alert,
+  StyleSheet, Text, TextInput, View, Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -248,7 +248,7 @@ export default function GuardianReportsScreen() {
       });
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
-  }, [period, sortOrder, dateFrom, dateTo]);
+  }, [period, sortOrder, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFocusEffect(useCallback(() => { loadElders(); }, [loadElders]));
   useEffect(() => { if (elders.length > 0) loadData(elders[elderIdx]); }, [elders, elderIdx, loadData]);

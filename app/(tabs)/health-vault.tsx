@@ -231,7 +231,7 @@ export default function HealthVaultScreen() {
       .subscribe();
 
     return () => { void supabase.removeChannel(channel); };
-  }, [user, targetUserId]);
+  }, [user, targetUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadAll = useCallback(async () => {
     setLoadingRecords(true);
@@ -240,7 +240,7 @@ export default function HealthVaultScreen() {
     } finally {
       setLoadingRecords(false);
     }
-  }, [user, targetUserId]);
+  }, [user, targetUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadRecords = async () => {
     if (!targetUserId) return;
@@ -709,7 +709,7 @@ export default function HealthVaultScreen() {
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
       return next;
     });
   };

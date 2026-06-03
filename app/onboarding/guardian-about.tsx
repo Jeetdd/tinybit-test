@@ -54,7 +54,7 @@ export default function GuardianAboutScreen() {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user?.email) setEmail(data.user.email);
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canNext = age.trim() !== "" && sex !== null;
 

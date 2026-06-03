@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Linking,
   Modal, Platform, Pressable, ScrollView, StatusBar, StyleSheet,
-  Text, TextInput, TouchableOpacity, View,
+  Text, TextInput, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -385,7 +385,7 @@ export default function DoctorsScreen() {
   // Keep targetId in sync with user id once auth loads
   useEffect(() => {
     if (!targetId && user?.id) setTargetId(user.id);
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadCategories = useCallback(async () => {
     const { data } = await supabase

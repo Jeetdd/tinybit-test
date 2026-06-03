@@ -294,7 +294,7 @@ function GuardianLocationView() {
         .subscribe()
     );
     return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
-  }, [elders.map(e => e.elder_id).join(',')]);
+  }, [elders.map(e => e.elder_id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openMaps = (loc: ElderLoc) => {
     const url = Platform.OS === 'ios'

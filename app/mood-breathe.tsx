@@ -6,12 +6,11 @@ import Animated, {
   withTiming, withRepeat, withSequence, Easing,
 } from "react-native-reanimated";
 import Svg, { Circle } from "react-native-svg";
-import Animated2 from "react-native-reanimated";
 import { useRouter, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 
-const AnimatedCircle = Animated2.createAnimatedComponent(Circle);
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const C = {
   navy:     "#1A2E6A",
@@ -38,7 +37,6 @@ export default function MoodBreatheScreen() {
 
   const ring1Scale = useSharedValue(1);
   const ring2Scale = useSharedValue(1);
-  const progress   = useSharedValue(0);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -69,7 +67,7 @@ export default function MoodBreatheScreen() {
       ring1Scale.value = withTiming(1, { duration: 400 });
       ring2Scale.value = withTiming(1, { duration: 400 });
     }
-  }, [active]);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!active) return;

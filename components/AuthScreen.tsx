@@ -222,7 +222,7 @@ export default function AuthScreen({ initialTab, role }: { initialTab: Tab; role
 
   const handleSignIn = async () => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password: loginPassword,
       });

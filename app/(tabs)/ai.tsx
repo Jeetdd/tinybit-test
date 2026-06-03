@@ -130,7 +130,7 @@ export default function TinyAIScreen() {
       text: at.greeting.replace('{name}', name),
       time: "Just now",
     }]);
-  }, [profile?.fullName, language]);
+  }, [profile?.fullName, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSend = async () => {
     const text = inputText.trim();

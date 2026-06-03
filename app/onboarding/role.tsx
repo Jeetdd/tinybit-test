@@ -193,15 +193,6 @@ export default function RoleSelection() {
   );
 }
 
-function FeatureItem({ text }: { text: string }) {
-  return (
-    <View style={styles.featureItem}>
-      <View style={styles.bullet} />
-      <Text style={styles.featureText}>{text}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -338,28 +329,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1,
     marginBottom: 12,
-  },
-  featuresRow: {
-    flexDirection: 'row',
-    marginBottom: 10,
-  },
-  featureItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 5,
-  },
-  bullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: C.teal,
-    marginRight: 8,
-  },
-  featureText: {
-    color: C.textMain,
-    fontSize: 13,
-    fontWeight: '700',
   },
   stickyFooter: {
     backgroundColor: C.bg,

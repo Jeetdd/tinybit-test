@@ -122,7 +122,7 @@ export default function WeatherScreen() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { loadByLocation(); }, []);
+  useEffect(() => { loadByLocation(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch by GPS location ─────────────────────────────────────────────────
   const loadByLocation = async () => {
@@ -303,7 +303,7 @@ export default function WeatherScreen() {
     setRefreshing(true);
     await loadByLocation();
     setRefreshing(false);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const gradient = weather ? getGradient(weather.conditionCode) : ["#3A7BD5", "#00D2FF"] as [string, string];
 

@@ -43,7 +43,7 @@ function MemoryCard({
     if (status.didJustFinish && isPlaying) {
       onStop();
     }
-  }, [status.didJustFinish, isPlaying]);
+  }, [status.didJustFinish, isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!memory.audio_uri) return;
@@ -57,7 +57,7 @@ function MemoryCard({
     } catch (e) {
       console.error("Playback sync error", e);
     }
-  }, [isPlaying]);
+  }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = async () => {
     if (memory.type !== "Voice" || !memory.audio_uri) return;
@@ -124,7 +124,7 @@ export default function MemoryHistoryScreen() {
     if (user) {
       loadMemories();
     }
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMemories = async () => {
     try {

@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter , useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useFocusEffect } from "expo-router";
+
 import {
   Dimensions,
   Image,
@@ -17,7 +17,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Animated, { FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import GuardianHomeScreen from "../../components/GuardianHomeScreen";
 import GuardianInviteCard from "../../components/GuardianInviteCard";
@@ -29,7 +28,7 @@ import type { Language } from "../../context/LanguageContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { scaleStyles } from "../../utils/scaleStyles";
 import { getCountryEmergency } from "../../constants/emergencyNumbers";
-import { getPreferredFirstName, truncateName } from "../../utils/profileName";
+import { getPreferredFirstName } from "../../utils/profileName";
 import { supabase } from "../../utils/supabase";
 import { useUnreadNotifCount } from "../../services/notifications";
 
@@ -189,8 +188,8 @@ function ElderHomeScreen() {
 
   const [medicines, setMedicines] = useState<any[]>([]);
   const [medLoading, setMedLoading] = useState(true);
-  const [healthStats, setHealthStats] = useState<any>(null);
-  const [dailyPrompt, setDailyPrompt] = useState("");
+  const [, setHealthStats] = useState<any>(null);
+  const [dailyPrompt] = useState("");
   const [latestMessage, setLatestMessage] = useState<any>(null);
   const [todayMood, setTodayMood] = useState<string>("—");
   const [locationSharing, setLocationSharing] = useState<boolean | null>(null);
@@ -208,7 +207,7 @@ function ElderHomeScreen() {
       fetchLatestMessage();
       fetchTodayMood();
     }
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-fetch medicines and mood every time the tab comes into focus.
   useFocusEffect(
@@ -217,6 +216,7 @@ function ElderHomeScreen() {
         fetchMedicines();
         fetchTodayMood();
       }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user])
   );
 
@@ -294,7 +294,6 @@ function ElderHomeScreen() {
     fullName: profile?.fullName,
     email: profile?.email || user?.email,
   });
-  const displayFirstName = truncateName(firstName, 16);
   const userName = profile?.fullName || firstName || user?.email?.split('@')[0] || "there";
   const guardianEmergencyNumber = profile?.emergencyPhone?.trim() || "";
   const guardianEmergencyLabel = profile?.emergencyRelation?.trim() || ht.guardian;

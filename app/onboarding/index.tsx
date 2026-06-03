@@ -19,7 +19,7 @@ const C = {
 
 export default function Splash() {
   const router = useRouter();
-  const { user, profile, isLoading } = useAuth();
+  const { user, isLoading } = useAuth();
 
   useEffect(() => {
     // We let RootLayoutNav handle the heavy lifting for logged-in users.

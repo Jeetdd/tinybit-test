@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import {
   View, Text, StyleSheet, Pressable, Modal,
-  ScrollView, Dimensions, Image,
+  ScrollView, Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -84,7 +84,7 @@ export default function SideMenu({ visible, onClose, userName, userEmail, onLogo
       visible ? 0 : MENU_W,
       { duration: 320, easing: Easing.out(Easing.cubic) },
     );
-  }, [visible]);
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const panelStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],

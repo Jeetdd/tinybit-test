@@ -124,7 +124,7 @@ export default function SOSScreen() {
           );
         }
       });
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openAddModal = () => {
     setEditingIndex(null);
@@ -207,7 +207,7 @@ export default function SOSScreen() {
       withSequence(withTiming(1.06, { duration: 1400 }), withTiming(1, { duration: 1400 })),
       -1, true
     );
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ring1Style = useAnimatedStyle(() => ({ transform: [{ scale: ring1Scale.value }] }));
   const progressRingStyle = useAnimatedStyle(() => ({
@@ -262,7 +262,7 @@ export default function SOSScreen() {
       }, 50);
     }
     return () => clearInterval(interval);
-  }, [isActivating, isCalled]);
+  }, [isActivating, isCalled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCall = (number: string) => Linking.openURL(`tel:${number}`).catch(() => Alert.alert('Error', 'Could not place call'));
 

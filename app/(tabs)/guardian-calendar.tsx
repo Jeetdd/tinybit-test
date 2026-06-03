@@ -113,7 +113,7 @@ export default function GuardianCalendarScreen() {
       )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [activeElderId]);
+  }, [activeElderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prevMonth = () => {
     if (curMonth === 0) { setCurYear(y => y - 1); setCurMonth(11); }

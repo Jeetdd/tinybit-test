@@ -165,7 +165,7 @@ function MemoCard({
     if (status.didJustFinish && isPlaying) {
       onStop();
     }
-  }, [status.didJustFinish, isPlaying]);
+  }, [status.didJustFinish, isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync play/pause with parent's playingId
   useEffect(() => {
@@ -174,7 +174,7 @@ function MemoCard({
       if (isPlaying) player.play();
       else           player.pause();
     } catch {}
-  }, [isPlaying]);
+  }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = async () => {
     if (!memo.media_url) return;
@@ -387,7 +387,7 @@ function RecordingPanel({
     );
     loop.start();
     return () => loop.stop();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const m  = Math.floor(secs / 60);
   const ss = (secs % 60).toString().padStart(2, '0');

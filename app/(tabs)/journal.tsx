@@ -24,6 +24,10 @@ import * as Sharing from 'expo-sharing';
 import { requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets, useAudioRecorder, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../utils/supabase";
+import { useLanguage } from "../../context/LanguageContext";
+import type { Language } from "../../context/LanguageContext";
+import { scaleStyles } from "../../utils/scaleStyles";
+import { getTodaysMemoryPrompt } from "../../utils/daily";
 
 async function uploadJournalAudio(uri: string, userId: string): Promise<string> {
   const buf  = await (await fetch(uri)).arrayBuffer();
@@ -34,10 +38,6 @@ async function uploadJournalAudio(uri: string, userId: string): Promise<string> 
   if (error) throw error;
   return supabase.storage.from('journal-audio').getPublicUrl(path).data.publicUrl;
 }
-import { useLanguage } from "../../context/LanguageContext";
-import type { Language } from "../../context/LanguageContext";
-import { scaleStyles } from "../../utils/scaleStyles";
-import { getTodaysMemoryPrompt } from "../../utils/daily";
 
 type JournalT = {
   memoryJournal: string; yourLifeStory: string; memoriesShared: string; dayStreak: string;
@@ -152,7 +152,7 @@ function MemoryCard({
     if (status.didJustFinish && isPlaying) {
       onStop();
     }
-  }, [status.didJustFinish, isPlaying]);
+  }, [status.didJustFinish, isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!memory.audio_uri) return;
@@ -166,7 +166,7 @@ function MemoryCard({
     } catch (e) {
       console.error(e);
     }
-  }, [isPlaying]);
+  }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = async () => {
     if (memory.type !== "Voice" || !memory.audio_uri) return;
@@ -247,7 +247,7 @@ export default function JournalScreen() {
 
   useEffect(() => {
     if (user) loadMemories();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMemories = async () => {
     try {

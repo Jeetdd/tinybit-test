@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Dimensions, Image, StyleSheet, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 interface AppSplashScreenProps {
   logoSvg?: string;

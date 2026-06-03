@@ -124,7 +124,7 @@ export default function CareCalendarScreen() {
     setSelectingTime(true);
   };
 
-  useEffect(() => { if (user) void loadEvents(); }, [user]);
+  useEffect(() => { if (user) void loadEvents(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadEvents = useCallback(async () => {
     if (!user) return;
@@ -587,7 +587,7 @@ function WheelPicker({ items, selectedIndex, onChange, width = 80 }: {
       ref.current?.scrollTo({ y: selectedIndex * ITEM_H, animated: false });
     }, 60);
     return () => clearTimeout(timer);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <ScrollView

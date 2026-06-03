@@ -242,7 +242,7 @@ const MedicationCard = memo(function MedicationCard({
 export default function MedicalScreen() {
   const insets   = useSafeAreaInsets();
   const router   = useRouter();
-  const { refreshProfile, user, profile } = useAuth();
+  const { refreshProfile, user } = useAuth();
   const { language } = useLanguage();
 
   // Memoize translation lookup — only recomputes when language changes

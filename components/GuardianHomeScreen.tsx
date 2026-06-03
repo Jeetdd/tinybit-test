@@ -251,7 +251,7 @@ export default function GuardianHomeScreen() {
     );
     const poll = setInterval(loadElders, 30_000);
     return () => { channels.forEach(ch => supabase.removeChannel(ch)); clearInterval(poll); };
-  }, [elderIdKey]);
+  }, [elderIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const active = elders[activeIdx];
 
@@ -290,7 +290,7 @@ export default function GuardianHomeScreen() {
         .subscribe()
     );
     return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
-  }, [elderIdKey]);
+  }, [elderIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Health Logs for active elder ──────────────────────────────────────────
   useEffect(() => {

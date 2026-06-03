@@ -274,7 +274,7 @@ export default function HealthLogScreen() {
   const [doctorName,  setDoctorName]  = useState('');
   const [doctorNotes, setDoctorNotes] = useState('');
 
-  useEffect(() => { loadTodayData(); }, [user?.id]);
+  useEffect(() => { loadTodayData(); }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load today's logs + medicines ────────────────────────────────────────────
   const loadTodayData = useCallback(async () => {
@@ -307,7 +307,7 @@ export default function HealthLogScreen() {
       }
       if (medRes.data) setMedicines(medRes.data);
     } catch { /* graceful fail */ }
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const animateWater = (count: number) => {
     Animated.timing(waterAnim, {

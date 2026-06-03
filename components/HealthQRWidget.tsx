@@ -10,6 +10,7 @@ import { API_BASE_URL } from "../config/api";
 
 // Pure-JS QR matrix generator — no Metro bundler issues
 // @ts-ignore — qrcode-generator ships CJS without TS declarations
+// eslint-disable-next-line import/no-named-as-default
 import qrcode from "qrcode-generator";
 
 const SERVER_URL = API_BASE_URL.replace("/api", "");
@@ -71,7 +72,7 @@ function QRMatrix({ url }: { url: string }) {
 // ── PDF HTML builder — matches the reference design ──────────────────────────
 function buildPDFHtml(params: {
   profileData: Record<string, any>;
-  medicines: Array<Record<string, any>>;
+  medicines: Record<string, any>[];
   qrDataUrl: string | null;
   date: string;
   cardId: string;
@@ -450,7 +451,7 @@ export default function HealthQRWidget() {
   useEffect(() => {
     if (!user?.id) return;
     loadOrCreateToken();
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadOrCreateToken = async () => {
     try {
@@ -567,6 +568,7 @@ export default function HealthQRWidget() {
   const handleShareURL = async () => {
     if (!scanUrl) return;
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { Share } = require("react-native");
       await Share.share({
         title: "My TinyBit Emergency Health Card",

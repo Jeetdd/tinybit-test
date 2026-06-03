@@ -82,7 +82,7 @@ export default function TalkToSathiModal({ visible, onClose, userName, context }
     } else {
       pulse.value = withTiming(1, { duration: 200 });
     }
-  }, [isRecording]);
+  }, [isRecording]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (visible && messages.length === 0) {
@@ -95,7 +95,7 @@ export default function TalkToSathiModal({ visible, onClose, userName, context }
         .then(() => Speech.speak(greeting, { language: 'en-US', rate: 0.88, pitch: 1.0 }))
         .catch(() => {});
     }
-  }, [visible]);
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendToSathi = async (msgs: Message[]) => {
     setStatus('thinking');

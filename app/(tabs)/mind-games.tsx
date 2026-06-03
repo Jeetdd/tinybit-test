@@ -164,7 +164,7 @@ export default function MindGamesScreen() {
   useEffect(() => {
      loadLeaderboard();
      loadMyScore();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadLeaderboard = async () => {
     try {

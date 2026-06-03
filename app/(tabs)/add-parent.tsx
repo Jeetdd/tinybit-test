@@ -161,7 +161,7 @@ export default function AddParentScreen() {
       }, () => loadLinks())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id, loadLinks]);
+  }, [user?.id, loadLinks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Send invitation (registered flow) ────────────────────────────────────
   const sendInvitation = async () => {

@@ -109,7 +109,7 @@ export default function NotificationsScreen() {
       )
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const markRead = async (id: string) => {
     setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));

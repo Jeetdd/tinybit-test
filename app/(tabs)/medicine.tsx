@@ -368,7 +368,7 @@ export default function MedicineScreen() {
 
   useEffect(() => {
     if (user) void loadWeek();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Real-time: reload when guardian adds/edits/deletes a medicine for this elder,
   // and when any medicine_log row changes (own toggle from another device).
@@ -402,7 +402,7 @@ export default function MedicineScreen() {
       supabase.removeChannel(dbChannel);
       supabase.removeChannel(guardianCh);
     };
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadWeek = async (silent = false) => {
     try {

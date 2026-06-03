@@ -135,7 +135,9 @@ export default function WellnessLogsScreen() {
   // ── Data loading ───────────────────────────────────────────────────────────
   useFocusEffect(useCallback(() => {
     loadAllLogs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]));
+
 
   const loadAllLogs = async () => {
     if (!user) { setLoading(false); return; }

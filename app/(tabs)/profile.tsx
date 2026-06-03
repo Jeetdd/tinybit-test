@@ -50,7 +50,7 @@ export default function ProfileScreen() {
 function ElderProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, profile, plan, logout, streak } = useAuth();
+  const { profile, plan, logout, streak } = useAuth();
   const { language, setLanguage, nightMode, setNightMode, fontSizeLabel, setFontSizeLabel, fontScale, colors: themeColors } = useLanguage();
   const { t } = useTranslation();
   const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);

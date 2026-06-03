@@ -3,10 +3,10 @@
  * Uses Claude Vision API via backend to analyze food images
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator, Alert, Image, Pressable, ScrollView,
-  StatusBar, StyleSheet, Text, TouchableOpacity, View,
+  StatusBar, StyleSheet, Text, View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";

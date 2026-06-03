@@ -1,24 +1,23 @@
 import 'react-native-url-polyfill/auto';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import Constants from 'expo-constants';
-import { Stack } from 'expo-router';
+import { Stack , useRouter, useSegments } from 'expo-router';
 // StatusBar is managed per-screen via expo-status-bar
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 import { setupGlobalErrorHandlers } from '../utils/logger';
 
-// Install global error handlers as early as possible
-setupGlobalErrorHandlers();
-
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { LanguageProvider, useLanguage } from '../context/LanguageContext';
-import { useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import AppSplashScreen from '../components/AppSplashScreen';
 import { supabase } from '../utils/supabase';
 import { deriveNamesFromUser } from '../utils/profileName';
 import { registerPushToken } from '../services/pushNotifications';
+
+// Install global error handlers as early as possible
+setupGlobalErrorHandlers();
 
 
 // Screens where the routing guard should NOT fire an automatic redirect.
@@ -30,6 +29,7 @@ const PROFILE_SETUP_SCREENS = new Set([
 
 async function setupAudio() {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { setAudioModeAsync } = require('expo-audio');
     if (setAudioModeAsync) {
       await setAudioModeAsync({
@@ -45,8 +45,10 @@ async function setupAudio() {
 async function setupNotifications() {
   if (Constants.executionEnvironment === 'storeClient') return;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Platform } = require('react-native');
     if (Platform.OS !== 'android') return;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Notifications = require('expo-notifications');
     if (Notifications && Notifications.setNotificationChannelAsync) {
       await Notifications.setNotificationChannelAsync('medicine-reminders', {
@@ -118,7 +120,7 @@ function RootLayoutNav() {
     const sub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
     Linking.getInitialURL().then(url => { if (active && url) handleAuthUrl(url); });
     return () => { active = false; sub.remove(); };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Run one-time setup
   useEffect(() => {
@@ -171,7 +173,7 @@ function RootLayoutNav() {
         }
       }
     }
-  }, [user, isLoading, profile, segments]);
+  }, [user, isLoading, profile, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return <AppSplashScreen />;

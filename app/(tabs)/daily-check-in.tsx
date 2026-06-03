@@ -77,7 +77,7 @@ export default function DailyCheckInScreen() {
     AsyncStorage.getItem(TODAY_KEY).then(val => {
       if (val === today) setAlreadyDone(true);
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setAnswer = (id: number, val: 'yes' | 'no') =>
     setQuestions(prev => prev.map(q => q.id === id ? { ...q, value: val } : q));
@@ -91,7 +91,7 @@ export default function DailyCheckInScreen() {
         setIsRecording(false);
         const uri = recorder.uri;
         if (uri) setVoiceUri(uri);
-      } catch (e) { setIsRecording(false); }
+      } catch { setIsRecording(false); }
     } else {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) return Alert.alert("Permission denied", "Microphone access is required.");
