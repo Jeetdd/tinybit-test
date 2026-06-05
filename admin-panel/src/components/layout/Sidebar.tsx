@@ -1,11 +1,13 @@
+'use client';
 import React, { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, UserCheck, Heart, Pill, Activity, FileText,
   AlertTriangle, Phone, ShieldAlert, Bot, MessageSquare, BookOpen,
   Calendar, MapPin, Video, Bell, BarChart3, Settings, LogOut,
   ChevronDown, ChevronRight, ChevronLeft, UserPlus, Inbox,
-  Stethoscope, ClipboardList, TrendingUp, Send, Trophy, Award,
+  Stethoscope, ClipboardList, TrendingUp, Trophy, Award,
   Zap, Map, Film, HelpCircle, Wind, Gift, Key, ScrollText,
   Layers, DollarSign, Users2,
 } from 'lucide-react';
@@ -22,9 +24,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  {
-    id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" />, path: '/',
-  },
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" />, path: '/dashboard' },
   {
     id: 'users', label: 'User Management', icon: <Users className="w-4 h-4" />,
     children: [
@@ -95,12 +95,8 @@ const NAV_ITEMS: NavItem[] = [
       { id: 'breathing', label: 'Breathing Programs', icon: <Wind className="w-4 h-4" />, path: '/content/breathing' },
     ],
   },
-  {
-    id: 'reports', label: 'Reports & Analytics', icon: <BarChart3 className="w-4 h-4" />, path: '/reports',
-  },
-  {
-    id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" />, path: '/notifications',
-  },
+  { id: 'reports', label: 'Reports & Analytics', icon: <BarChart3 className="w-4 h-4" />, path: '/reports' },
+  { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" />, path: '/notifications' },
   {
     id: 'rewards', label: 'Rewards & Gamification', icon: <Trophy className="w-4 h-4" />,
     children: [
@@ -125,12 +121,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const location = useLocation();
+  const pathname = usePathname();
   const { user, logout } = useAuth();
+
   const [openSections, setOpenSections] = useState<Set<string>>(() => {
     const set = new Set<string>();
     NAV_ITEMS.forEach(item => {
-      if (item.children?.some(child => location.pathname === child.path || location.pathname.startsWith((child.path || '') + '/'))) {
+      if (item.children?.some(child => pathname === child.path || pathname.startsWith((child.path || '') + '/'))) {
         set.add(item.id);
       }
     });
@@ -146,7 +143,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   }
 
   function isActiveParent(item: NavItem): boolean {
-    return item.children?.some(child => location.pathname === child.path || location.pathname.startsWith((child.path || '') + '/')) ?? false;
+    return item.children?.some(child => pathname === child.path || pathname.startsWith((child.path || '') + '/')) ?? false;
+  }
+
+  function isActivePath(path: string): boolean {
+    return pathname === path || pathname.startsWith(path + '/');
   }
 
   const roleLabels: Record<string, string> = {
@@ -196,21 +197,22 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           const isActive = isActiveParent(item);
 
           if (!item.children) {
+            const active = isActivePath(item.path!);
             return (
-              <NavLink
+              <Link
                 key={item.id}
-                to={item.path!}
-                className={({ isActive }) => cn('sidebar-link', isActive && 'active')}
+                href={item.path!}
                 title={collapsed ? item.label : undefined}
+                className={cn('sidebar-link', active && 'active')}
               >
-                <span className={cn('flex-shrink-0', !collapsed && 'text-current')}>{item.icon}</span>
+                <span className="flex-shrink-0">{item.icon}</span>
                 {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
                 {!collapsed && item.badge && (
                   <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full', item.badge.variant === 'danger' ? 'bg-red-500 text-white' : item.badge.variant === 'warning' ? 'bg-amber-500 text-white' : 'bg-brand-500 text-white')}>
                     {item.badge.text}
                   </span>
                 )}
-              </NavLink>
+              </Link>
             );
           }
 
@@ -236,21 +238,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
               {!collapsed && isOpen && (
                 <div className="ml-3 mt-0.5 pl-3 border-l border-slate-200 dark:border-slate-700 space-y-0.5 animate-fade-in">
-                  {item.children.map(child => (
-                    <NavLink
-                      key={child.id}
-                      to={child.path!}
-                      className={({ isActive }) => cn('sidebar-link text-xs py-1.5', isActive && 'active')}
-                    >
-                      <span className="flex-shrink-0 opacity-70">{child.icon}</span>
-                      <span className="flex-1 truncate">{child.label}</span>
-                      {child.badge && (
-                        <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full', child.badge.variant === 'danger' ? 'bg-red-500 text-white' : child.badge.variant === 'warning' ? 'bg-amber-500 text-white' : 'bg-brand-500 text-white')}>
-                          {child.badge.text}
-                        </span>
-                      )}
-                    </NavLink>
-                  ))}
+                  {item.children.map(child => {
+                    const childActive = isActivePath(child.path!);
+                    return (
+                      <Link
+                        key={child.id}
+                        href={child.path!}
+                        className={cn('sidebar-link text-xs py-1.5', childActive && 'active')}
+                      >
+                        <span className="flex-shrink-0 opacity-70">{child.icon}</span>
+                        <span className="flex-1 truncate">{child.label}</span>
+                        {child.badge && (
+                          <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full', child.badge.variant === 'danger' ? 'bg-red-500 text-white' : child.badge.variant === 'warning' ? 'bg-amber-500 text-white' : 'bg-brand-500 text-white')}>
+                            {child.badge.text}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
             </div>

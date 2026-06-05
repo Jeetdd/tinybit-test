@@ -1,3 +1,4 @@
+'use client';
 import React, { createContext, useContext, useState } from 'react';
 import type { AdminUser } from '../types';
 import { currentAdmin } from '../data/mockData';
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(() => {
+    if (typeof window === 'undefined') return null;
     const saved = sessionStorage.getItem('tb-admin-user');
     return saved ? JSON.parse(saved) : null;
   });
@@ -42,7 +44,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await new Promise(r => setTimeout(r, 600));
     if (otp === '123456' || otp.length === 6) {
       setUser(pendingUser);
-      sessionStorage.setItem('tb-admin-user', JSON.stringify(pendingUser));
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('tb-admin-user', JSON.stringify(pendingUser));
+      }
       setRequiresTwoFactor(false);
       setPendingUser(null);
       return true;
@@ -52,7 +56,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     setUser(null);
-    sessionStorage.removeItem('tb-admin-user');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('tb-admin-user');
+    }
   };
 
   return (

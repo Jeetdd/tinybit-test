@@ -1,15 +1,16 @@
+'use client';
 import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, Bell, Sun, Moon, ChevronDown, Settings, User, LogOut, X, AlertTriangle, UserPlus, Pill, CheckCircle } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../ui';
-import { useNavigate } from 'react-router-dom';
 
 const NOTIFICATIONS = [
   { id: 1, type: 'sos', title: 'SOS Alert', message: 'Ramesh Kumar triggered SOS in Mumbai', time: '2 min ago', read: false, icon: <AlertTriangle className="w-4 h-4" />, color: 'text-red-500 bg-red-50 dark:bg-red-900/30' },
   { id: 2, type: 'user', title: 'New Elder Registered', message: 'Savita Devi (78) registered from Delhi', time: '8 min ago', read: false, icon: <UserPlus className="w-4 h-4" />, color: 'text-brand-500 bg-brand-50 dark:bg-brand-900/30' },
   { id: 3, type: 'medicine', title: 'Missed Medication', message: '23 elders missed morning dose', time: '1 hr ago', read: false, icon: <Pill className="w-4 h-4" />, color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/30' },
-  { id: 4, type: 'sos', title: 'SOS Resolved', message: 'Geeta Verma\'s SOS alert resolved', time: '1 hr ago', read: true, icon: <CheckCircle className="w-4 h-4" />, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' },
+  { id: 4, type: 'sos', title: 'SOS Resolved', message: "Geeta Verma's SOS alert resolved", time: '1 hr ago', read: true, icon: <CheckCircle className="w-4 h-4" />, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' },
   { id: 5, type: 'user', title: 'Guardian Invitation', message: '12 pending guardian invitations', time: '2 hr ago', read: true, icon: <UserPlus className="w-4 h-4" />, color: 'text-brand-500 bg-brand-50 dark:bg-brand-900/30' },
 ];
 
@@ -29,7 +30,7 @@ interface TopBarProps {
 export function TopBar({ sidebarCollapsed }: TopBarProps) {
   const { isDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -108,7 +109,7 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
             {filteredSearch.map(item => (
               <button
                 key={item.href}
-                onClick={() => { navigate(item.href); setSearchOpen(false); setSearchQuery(''); }}
+                onClick={() => { router.push(item.href); setSearchOpen(false); setSearchQuery(''); }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <Search className="w-3.5 h-3.5 text-slate-400" />
@@ -116,7 +117,7 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
               </button>
             ))}
             {filteredSearch.length === 0 && (
-              <div className="px-3 py-6 text-center text-sm text-slate-400">No results for "{searchQuery}"</div>
+              <div className="px-3 py-6 text-center text-sm text-slate-400">No results for &quot;{searchQuery}&quot;</div>
             )}
           </div>
         )}
@@ -209,7 +210,7 @@ export function TopBar({ sidebarCollapsed }: TopBarProps) {
                 <button className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                   <User className="w-4 h-4 text-slate-400" /> Profile
                 </button>
-                <button onClick={() => { navigate('/settings/general'); setUserMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <button onClick={() => { router.push('/settings/general'); setUserMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                   <Settings className="w-4 h-4 text-slate-400" /> Settings
                 </button>
               </div>

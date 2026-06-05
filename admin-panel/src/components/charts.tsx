@@ -1,3 +1,4 @@
+'use client';
 import React from 'react';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,

@@ -5,7 +5,6 @@ const router = express.Router();
 const {
   checkSession,
   login, logout,
-  serveDashboard,
   getStats, getAnalytics,
   getUsers, banUser, deleteUser,
   getConnections, deleteConnection,
@@ -18,8 +17,10 @@ const {
   broadcast,
 } = require('../controllers/admin.controller');
 
-// Serve admin panel assets (CSS, JS if ever split out)
-router.use('/assets', express.static(path.join(__dirname, '../../public/admin')));
+const PANEL_DIR = path.join(__dirname, '../../public/admin');
+
+// Serve static assets from the React build (JS, CSS, images, etc.)
+router.use(express.static(PANEL_DIR));
 
 // Session auth middleware — applied to all /api/* routes except /api/login
 const sessionAuth = (req, res, next) => {
@@ -32,9 +33,6 @@ const sessionAuth = (req, res, next) => {
   }
   return next();
 };
-
-// ── Dashboard page ────────────────────────────────────────────────────────────
-router.get('/', serveDashboard);
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 router.post('/api/login',  login);
@@ -63,5 +61,11 @@ router.get('/api/mind-games',       sessionAuth, getMindGames);
 
 // ── Broadcast ─────────────────────────────────────────────────────────────────
 router.post('/api/broadcast', sessionAuth, broadcast);
+
+// ── SPA catch-all — must be last ──────────────────────────────────────────────
+// Any non-API GET request (e.g. /admin/users/elders) serves the React app shell
+router.get('*', (req, res) => {
+  res.sendFile(path.join(PANEL_DIR, 'index.html'));
+});
 
 module.exports = router;
