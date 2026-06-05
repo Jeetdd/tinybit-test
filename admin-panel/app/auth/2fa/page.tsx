@@ -5,7 +5,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { ShieldCheck, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
 
 export default function TwoFactorPage() {
-  const { verifyOtp, requiresTwoFactor } = useAuth();
+  const { verifyOtp, requiresTwoFactor, isAuthenticated } = useAuth();
   const router = useRouter();
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -13,9 +13,14 @@ export default function TwoFactorPage() {
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    if (!requiresTwoFactor) router.replace('/auth/login');
-    else inputs.current[0]?.focus();
-  }, [requiresTwoFactor, router]);
+    if (isAuthenticated) {
+      router.replace('/dashboard');
+    } else if (!requiresTwoFactor) {
+      router.replace('/auth/login');
+    } else {
+      inputs.current[0]?.focus();
+    }
+  }, [requiresTwoFactor, isAuthenticated, router]);
 
   function handleChange(index: number, value: string) {
     if (!/^\d*$/.test(value)) return;
