@@ -77,39 +77,59 @@ function RootLayoutNav() {
     segments,
   });
 
-  // Fallback: handle implicit-flow OAuth redirect when openAuthSessionAsync
-  // doesn't intercept it. Only handles access_token= (implicit); PKCE code=
-  // is handled exclusively by oauth.ts to avoid double-consumption.
+  // Fallback OAuth deep-link handler.
+  // - Implicit flow (access_token=): handled for both warm and cold-start.
+  // - PKCE flow (code=): handled ONLY on cold-start (isInitialUrl=true).
+  //   When the app is warm, oauth.ts owns code exchange via its Linking listener.
+  //   When Android kills the app and restarts it from the OAuth redirect, oauth.ts
+  //   is not running, so we must exchange the code here instead.
   useEffect(() => {
     let active = true;
 
-    const handleAuthUrl = async (url: string) => {
-      if (!url.includes('access_token=')) return;
+    const handleAuthUrl = async (url: string, isInitialUrl = false) => {
+      const hasAccessToken = url.includes('access_token=');
+      const hasPKCECode    = url.includes('code=');
+      if (!hasAccessToken && !hasPKCECode) return;
       try {
-        const separator = url.includes('#') ? '#' : '?';
-        const fragment = url.split(separator)[1] ?? '';
-        const p = new URLSearchParams(fragment);
-        const accessToken = p.get('access_token');
-        const refreshToken = p.get('refresh_token') ?? '';
-        if (!accessToken) return;
-        const { data } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-        const session = data.session;
-        if (!session?.user) return;
+        let sessionUser = null;
+
+        if (hasPKCECode && isInitialUrl) {
+          const qs   = (url.split('?')[1] ?? '').split('#')[0];
+          const code = new URLSearchParams(qs).get('code') ?? '';
+          if (!code) return;
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error || !data?.session?.user) return;
+          sessionUser = data.session.user;
+        } else if (hasAccessToken) {
+          const separator   = url.includes('#') ? '#' : '?';
+          const fragment    = url.split(separator)[1] ?? '';
+          const p           = new URLSearchParams(fragment);
+          const accessToken = p.get('access_token');
+          const refreshToken = p.get('refresh_token') ?? '';
+          if (!accessToken) return;
+          const { data } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          if (!data.session?.user) return;
+          sessionUser = data.session.user;
+        } else {
+          return; // PKCE code via warm Linking — oauth.ts handles it
+        }
+
+        if (!sessionUser || !active) return;
 
         const { data: profileData } = await supabase
           .from('profiles')
           .select('role')
-          .eq('id', session.user.id)
+          .eq('id', sessionUser.id)
           .single();
 
-        if (!active) return; // effect cleaned up before async resolved
+        if (!active) return;
         if (profileData?.role) {
           router.replace('/(tabs)');
         } else {
-          const names = deriveNamesFromUser(session.user);
+          const names = deriveNamesFromUser(sessionUser);
           router.replace({
             pathname: '/onboarding/role' as any,
-            params: { firstName: names.firstName, lastName: names.lastName, email: session.user.email ?? '' },
+            params: { firstName: names.firstName, lastName: names.lastName, email: sessionUser.email ?? '' },
           });
         }
       } catch (err) {
@@ -117,8 +137,8 @@ function RootLayoutNav() {
       }
     };
 
-    const sub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
-    Linking.getInitialURL().then(url => { if (active && url) handleAuthUrl(url); });
+    const sub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url, false));
+    Linking.getInitialURL().then(url => { if (active && url) handleAuthUrl(url, true); });
     return () => { active = false; sub.remove(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -145,8 +165,9 @@ function RootLayoutNav() {
 
     if (!user) {
       if (inTabs) {
-        // Defer navigation one tick so target components are fully mounted
-        setTimeout(() => router.replace('/onboarding'), 0);
+        setTimeout(() => router.replace('/onboarding/signup' as any), 0);
+      } else if (inOnboarding && currentScreen !== 'signup' && currentScreen !== 'login' && currentScreen !== 'otp') {
+        setTimeout(() => router.replace('/onboarding/signup' as any), 0);
       }
       return;
     }
