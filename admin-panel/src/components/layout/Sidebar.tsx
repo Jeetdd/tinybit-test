@@ -3,8 +3,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, UserCheck, FileText,
-  AlertTriangle, Phone, ShieldAlert, Bot, MessageSquare,
+  LayoutDashboard, Users, UserCheck, Bot, MessageSquare,
   Video, Bell, BarChart3, Settings, LogOut,
   ChevronDown, ChevronRight, ChevronLeft, Inbox,
   TrendingUp, Trophy,
@@ -87,16 +86,6 @@ const NAV_ITEMS: NavItem[] = [
       { id: 'ai-analytics', label: 'Token Analytics', icon: <TrendingUp className="w-4 h-4" />, path: '/ai/analytics' },
       { id: 'ai-models', label: 'AI Models', icon: <Cpu className="w-4 h-4" />, path: '/ai/models' },
       { id: 'ai-costs', label: 'Cost Tracking', icon: <DollarSign className="w-4 h-4" />, path: '/ai/costs' },
-    ],
-  },
-  {
-    id: 'emergency',
-    label: 'SOS Management',
-    icon: <ShieldAlert className="w-4 h-4" />,
-    children: [
-      { id: 'sos', label: 'SOS Alerts', icon: <AlertTriangle className="w-4 h-4" />, path: '/emergency/sos', badge: { text: '7', variant: 'danger' } },
-      { id: 'emergency-contacts', label: 'Emergency Contacts', icon: <Phone className="w-4 h-4" />, path: '/emergency/contacts' },
-      { id: 'incidents', label: 'Incident Reports', icon: <FileText className="w-4 h-4" />, path: '/emergency/incidents' },
     ],
   },
   {
