@@ -22,10 +22,28 @@ import { supabase } from '../utils/supabase';
 
 type Section = 'Morning' | 'Afternoon' | 'Night';
 
+type DoseSlot = { section: Section; time: string };
+
 const SECTION_TIMES: Record<Section, string[]> = {
   Morning:   ['6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM'],
   Afternoon: ['12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM'],
   Night:     ['7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM', '11:00 PM'],
+};
+
+type FreqKey = 'Once Daily' | 'Twice Daily' | 'Three Times Daily' | 'Four Times Daily';
+
+const FREQUENCY_OPTIONS: { label: FreqKey; count: number }[] = [
+  { label: 'Once Daily',        count: 1 },
+  { label: 'Twice Daily',       count: 2 },
+  { label: 'Three Times Daily', count: 3 },
+  { label: 'Four Times Daily',  count: 4 },
+];
+
+const DEFAULT_SLOTS: Record<FreqKey, DoseSlot[]> = {
+  'Once Daily':        [{ section: 'Morning', time: '8:00 AM' }],
+  'Twice Daily':       [{ section: 'Morning', time: '8:00 AM' }, { section: 'Night', time: '8:00 PM' }],
+  'Three Times Daily': [{ section: 'Morning', time: '8:00 AM' }, { section: 'Afternoon', time: '1:00 PM' }, { section: 'Night', time: '8:00 PM' }],
+  'Four Times Daily':  [{ section: 'Morning', time: '8:00 AM' }, { section: 'Afternoon', time: '12:00 PM' }, { section: 'Afternoon', time: '4:00 PM' }, { section: 'Night', time: '8:00 PM' }],
 };
 
 const SECTION_CONFIG = {
@@ -125,8 +143,8 @@ export default function AddMedicineModal({ visible, onClose, onAdded, targetUser
   const [name, setName] = useState('');
   const [dosage, setDosage] = useState('');
   const [dosageUnit, setDosageUnit] = useState('tablet');
-  const [section, setSection] = useState<Section>('Morning');
-  const [selectedTime, setSelectedTime] = useState('8:00 AM');
+  const [frequency, setFrequency] = useState<FreqKey>('Once Daily');
+  const [doseSlots, setDoseSlots] = useState<DoseSlot[]>(DEFAULT_SLOTS['Once Daily']);
   const [meal, setMeal] = useState('After Meal');
   const [durationKey, setDurationKey] = useState('Ongoing');
   const [customDays, setCustomDays] = useState('');
@@ -134,9 +152,19 @@ export default function AddMedicineModal({ visible, onClose, onAdded, targetUser
   const [stockCount, setStockCount] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSectionChange = (s: Section) => {
-    setSection(s);
-    setSelectedTime(SECTION_TIMES[s][2]); // default to middle time
+  const handleFrequencyChange = (freq: FreqKey) => {
+    setFrequency(freq);
+    setDoseSlots([...DEFAULT_SLOTS[freq]]);
+  };
+
+  const updateSlotSection = (idx: number, s: Section) => {
+    setDoseSlots(prev => prev.map((slot, i) =>
+      i === idx ? { section: s, time: SECTION_TIMES[s][2] } : slot
+    ));
+  };
+
+  const updateSlotTime = (idx: number, t: string) => {
+    setDoseSlots(prev => prev.map((slot, i) => i === idx ? { ...slot, time: t } : slot));
   };
 
   const toggleDay = (day: number) => {
@@ -147,7 +175,7 @@ export default function AddMedicineModal({ visible, onClose, onAdded, targetUser
 
   const reset = () => {
     setName(''); setDosage(''); setDosageUnit('tablet');
-    setSection('Morning'); setSelectedTime('8:00 AM');
+    setFrequency('Once Daily'); setDoseSlots([...DEFAULT_SLOTS['Once Daily']]);
     setMeal('After Meal'); setDurationKey('Ongoing');
     setCustomDays(''); setSelectedDays(ALL_DAYS);
     setStockCount('');
@@ -172,22 +200,27 @@ export default function AddMedicineModal({ visible, onClose, onAdded, targetUser
       }
 
       const detail = `${dosage.trim()} ${dosageUnit} · ${meal}`;
-      const notifIds = await scheduleNotification(name.trim(), detail, selectedTime, selectedDays);
 
-      const { error: insertError } = await supabase.from('medicines').insert({
-        user_id:       ownerId,
-        name:          name.trim(),
-        dosage:        `${dosage.trim()} ${dosageUnit}`,
-        dosage_unit:   dosageUnit,
-        schedule_time: section,
-        time:          selectedTime,
-        instruction:   meal,
-        days_of_week:  selectedDays,
-        start_date:    today,
-        end_date:      endDate,
-        notes:         notifIds.length ? JSON.stringify({ notif_ids: notifIds }) : null,
-        stock:         stockCount.trim() ? parseInt(stockCount, 10) : 0,
-      });
+      // Insert one row per dose slot
+      const rows = await Promise.all(doseSlots.map(async (slot) => {
+        const notifIds = await scheduleNotification(name.trim(), detail, slot.time, selectedDays);
+        return {
+          user_id:       ownerId,
+          name:          name.trim(),
+          dosage:        `${dosage.trim()} ${dosageUnit}`,
+          dosage_unit:   dosageUnit,
+          schedule_time: slot.section,
+          time:          slot.time,
+          instruction:   meal,
+          days_of_week:  selectedDays,
+          start_date:    today,
+          end_date:      endDate,
+          notes:         notifIds.length ? JSON.stringify({ notif_ids: notifIds }) : null,
+          stock:         stockCount.trim() ? parseInt(stockCount, 10) : 0,
+        };
+      }));
+
+      const { error: insertError } = await supabase.from('medicines').insert(rows);
 
       if (insertError) throw insertError;
 
@@ -227,7 +260,6 @@ export default function AddMedicineModal({ visible, onClose, onAdded, targetUser
   };
 
   const canAdd = name.trim().length > 0 && dosage.trim().length > 0 && selectedDays.length > 0;
-  const cfg = SECTION_CONFIG[section];
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
@@ -289,43 +321,61 @@ export default function AddMedicineModal({ visible, onClose, onAdded, targetUser
             </View>
           </ScrollView>
 
-          {/* ── Time of Day ── */}
-          <Text style={[styles.label, { marginTop: 20 }]}>Time of Day</Text>
-          <View style={styles.row3}>
-            {(['Morning', 'Afternoon', 'Night'] as Section[]).map((s) => {
-              const c = SECTION_CONFIG[s];
-              const active = section === s;
-              return (
-                <Pressable
-                  key={s}
-                  onPress={() => handleSectionChange(s)}
-                  style={[styles.sectionBtn, active && { borderColor: c.color, backgroundColor: `${c.color}18` }]}
-                >
-                  <Text style={styles.sectionBtnIcon}>{c.icon}</Text>
-                  <Text style={[styles.sectionBtnText, active && { color: c.color }]}>{s}</Text>
-                </Pressable>
-              );
-            })}
+          {/* ── Frequency ── */}
+          <Text style={[styles.label, { marginTop: 20 }]}>How Often</Text>
+          <View style={styles.wrapRow}>
+            {FREQUENCY_OPTIONS.map((opt) => (
+              <Pressable
+                key={opt.label}
+                onPress={() => handleFrequencyChange(opt.label)}
+                style={[styles.chip, frequency === opt.label && styles.chipActive]}
+              >
+                <Text style={[styles.chipText, frequency === opt.label && styles.chipTextActive]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
           </View>
 
-          {/* ── Reminder Time ── */}
-          <Text style={[styles.label, { marginTop: 20 }]}>Reminder Time</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ flexDirection: 'row', gap: 10, paddingRight: 4 }}>
-              {SECTION_TIMES[section].map((t) => (
-                <Pressable
-                  key={t}
-                  onPress={() => setSelectedTime(t)}
-                  style={[
-                    styles.timeChip,
-                    selectedTime === t && { backgroundColor: cfg.color, borderColor: cfg.color },
-                  ]}
-                >
-                  <Text style={[styles.timeChipText, selectedTime === t && { color: '#fff' }]}>{t}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
+          {/* ── Dose Slots ── */}
+          <Text style={[styles.label, { marginTop: 20 }]}>Dose Schedule</Text>
+          {doseSlots.map((slot, idx) => {
+            const cfg = SECTION_CONFIG[slot.section];
+            return (
+              <View key={idx} style={styles.slotCard}>
+                <Text style={styles.slotLabel}>Dose {idx + 1}</Text>
+                <View style={styles.row3}>
+                  {(['Morning', 'Afternoon', 'Night'] as Section[]).map((s) => {
+                    const c = SECTION_CONFIG[s];
+                    const active = slot.section === s;
+                    return (
+                      <Pressable
+                        key={s}
+                        onPress={() => updateSlotSection(idx, s)}
+                        style={[styles.sectionBtn, active && { borderColor: c.color, backgroundColor: `${c.color}18` }]}
+                      >
+                        <Text style={styles.sectionBtnIcon}>{c.icon}</Text>
+                        <Text style={[styles.sectionBtnText, active && { color: c.color }]}>{s}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
+                  <View style={{ flexDirection: 'row', gap: 10, paddingRight: 4 }}>
+                    {SECTION_TIMES[slot.section].map((t) => (
+                      <Pressable
+                        key={t}
+                        onPress={() => updateSlotTime(idx, t)}
+                        style={[styles.timeChip, slot.time === t && { backgroundColor: cfg.color, borderColor: cfg.color }]}
+                      >
+                        <Text style={[styles.timeChipText, slot.time === t && { color: '#fff' }]}>{t}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+            );
+          })}
 
           {/* ── When to Take ── */}
           <Text style={[styles.label, { marginTop: 20 }]}>When to Take</Text>
@@ -395,7 +445,7 @@ export default function AddMedicineModal({ visible, onClose, onAdded, targetUser
                 onPress={() => toggleDay(idx)}
                 style={[
                   styles.dayCircle,
-                  selectedDays.includes(idx) && { backgroundColor: cfg.color, borderColor: cfg.color },
+                  selectedDays.includes(idx) && { backgroundColor: SECTION_CONFIG[doseSlots[0]?.section ?? 'Morning'].color, borderColor: SECTION_CONFIG[doseSlots[0]?.section ?? 'Morning'].color },
                 ]}
               >
                 <Text style={[styles.dayCircleText, selectedDays.includes(idx) && { color: '#fff' }]}>{d}</Text>
@@ -476,6 +526,12 @@ const styles = StyleSheet.create({
   mealBtnTextActive: { color: '#2E7D32' },
 
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+
+  slotCard: {
+    backgroundColor: '#fff', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#E4EAF2', marginBottom: 12,
+  },
+  slotLabel: { fontSize: 12, fontWeight: '800', color: '#9DAEC0', marginBottom: 10, letterSpacing: 0.3 },
 
   daysRow: { flexDirection: 'row', justifyContent: 'space-between' },
   dayCircle: {

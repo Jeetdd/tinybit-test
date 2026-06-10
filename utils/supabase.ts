@@ -1,7 +1,18 @@
 import 'react-native-url-polyfill/auto';
+import * as ExpoCrypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+
+// Polyfill crypto.subtle so Supabase uses S256 PKCE instead of falling back to
+// 'plain', which causes "code challenge does not match" errors on Android/Hermes.
+if (!(globalThis as any).crypto) (globalThis as any).crypto = {};
+if (!(globalThis as any).crypto.subtle) {
+  (globalThis as any).crypto.subtle = {
+    digest: (_algo: string, data: ArrayBuffer) =>
+      ExpoCrypto.digest(ExpoCrypto.CryptoDigestAlgorithm.SHA256, new Uint8Array(data)),
+  };
+}
 
 const supabaseUrl = 'https://knwpleyvrfdqnxqnejyh.supabase.co';
 const supabaseAnonKey = 'sb_publishable_XB_BaNugDNVKTMD5guHsKg_HKJ163eH';

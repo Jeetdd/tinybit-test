@@ -227,6 +227,7 @@ export default function TinyAIScreen() {
       text: at.greeting.replace('{name}', name),
       time: "Just now",
     }]);
+    sathiAi.clearHistory().catch(() => {});
   };
 
   const isWelcome =

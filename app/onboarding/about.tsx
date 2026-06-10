@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -574,6 +574,9 @@ export default function AboutScreen() {
   const [emergencyRelation, setEmergencyRelation]  = useState("");
   const [loading,           setLoading]            = useState(false);
 
+  const scrollRef = useRef<ScrollView>(null);
+  const emergencyFieldY = useRef(0);
+
   const langs = useMemo(() => getCountryLanguages(country.code), [country.code]);
 
   // Pre-fill email: params (social) → auth user email → saved profile email (phone auth)
@@ -721,6 +724,7 @@ export default function AboutScreen() {
 
       <View style={styles.card}>
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
@@ -875,22 +879,31 @@ export default function AboutScreen() {
           </View>
 
           {/* ── Emergency Contact ── */}
-          <Text style={[styles.fieldLabel, { marginTop: 24 }]}>{t.emergencyContact}</Text>
-          <View style={styles.phoneRow}>
-            <Pressable style={styles.countryDialBtn} onPress={() => setEmergencyPickerVisible(true)}>
-              <Text style={styles.countryFlag}>{emergencyCountry.flag}</Text>
-              <Text style={styles.countryDialText}>{emergencyCountry.dial}</Text>
-              <Ionicons name="chevron-down" size={16} color="#8A94A6" />
-            </Pressable>
-            <View style={[styles.inputBox, { flex: 1 }]}>
-              <TextInput
-                style={styles.input}
-                placeholder="98765 43210"
-                placeholderTextColor="#B0BBC8"
-                keyboardType="phone-pad"
-                value={emergencyPhone}
-                onChangeText={setEmergencyPhone}
-              />
+          <View
+            onLayout={(e) => { emergencyFieldY.current = e.nativeEvent.layout.y; }}
+          >
+            <Text style={[styles.fieldLabel, { marginTop: 24 }]}>{t.emergencyContact}</Text>
+            <View style={styles.phoneRow}>
+              <Pressable style={styles.countryDialBtn} onPress={() => setEmergencyPickerVisible(true)}>
+                <Text style={styles.countryFlag}>{emergencyCountry.flag}</Text>
+                <Text style={styles.countryDialText}>{emergencyCountry.dial}</Text>
+                <Ionicons name="chevron-down" size={16} color="#8A94A6" />
+              </Pressable>
+              <View style={[styles.inputBox, { flex: 1 }]}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="98765 43210"
+                  placeholderTextColor="#B0BBC8"
+                  keyboardType="phone-pad"
+                  value={emergencyPhone}
+                  onChangeText={setEmergencyPhone}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      scrollRef.current?.scrollTo({ y: emergencyFieldY.current - 20, animated: true });
+                    }, 300);
+                  }}
+                />
+              </View>
             </View>
           </View>
 

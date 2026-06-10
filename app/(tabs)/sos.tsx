@@ -94,6 +94,7 @@ export default function SOSScreen() {
   const [isActivating, setIsActivating] = useState(false);
   const [isCalled, setIsCalled] = useState(false);
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
+  const [guardianNames, setGuardianNames] = useState<string[]>([]);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingContact, setEditingContact] = useState<EmergencyContact>({
@@ -122,6 +123,18 @@ export default function SOSScreen() {
               initials: r.name.substring(0, 1).toUpperCase(),
             }))
           );
+        }
+      });
+
+    // Load connected guardians for "Sharing with Family"
+    supabase
+      .from('guardian_elder_links')
+      .select('guardian_id, profiles!guardian_id(first_name)')
+      .eq('elder_id', user!.id)
+      .eq('status', 'connected')
+      .then(({ data }) => {
+        if (data) {
+          setGuardianNames(data.map((r: any) => r.profiles?.first_name ?? 'Guardian').filter(Boolean));
         }
       });
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -447,17 +460,26 @@ export default function SOSScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.featureTitle}>Sharing with family</Text>
-              <Text style={styles.featureSub}>
-                <Text style={styles.nameHighlight}>Rahul</Text>
-                {" & "}
-                <Text style={styles.nameHighlight}>Priya</Text>
-                {" can see your location"}
-              </Text>
+              {guardianNames.length > 0 ? (
+                <Text style={styles.featureSub}>
+                  {guardianNames.map((name, i) => (
+                    <Text key={name}>
+                      <Text style={styles.nameHighlight}>{name}</Text>
+                      {i < guardianNames.length - 1 ? (i === guardianNames.length - 2 ? ' & ' : ', ') : ''}
+                    </Text>
+                  ))}
+                  <Text>{' can see your location'}</Text>
+                </Text>
+              ) : (
+                <Text style={styles.featureSub}>No guardians connected yet</Text>
+              )}
             </View>
-            <View style={styles.activeBadge}>
-              <View style={styles.activeDot} />
-              <Text style={styles.activeBadgeText}>Active</Text>
-            </View>
+            {guardianNames.length > 0 && (
+              <View style={styles.activeBadge}>
+                <View style={styles.activeDot} />
+                <Text style={styles.activeBadgeText}>Active</Text>
+              </View>
+            )}
           </View>
         </View>
         </ScrollView>

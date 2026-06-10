@@ -608,7 +608,7 @@ export default function GuardianHomeScreen() {
                   icon="folder-open"
                   iconBg="#EFF6FF"
                   iconColor="#1D4ED8"
-                  title="Health Vault"
+                  title="Health Records"
                   subtitle="View & upload medical reports, prescriptions, X-rays"
                   fullWidth
                   onPress={() => setVaultPickerOpen(true)}
@@ -1014,7 +1014,7 @@ export default function GuardianHomeScreen() {
         >
           <View style={s.vaultSheet}>
             <View style={s.vaultHandle} />
-            <Text style={s.vaultTitle}>Health Vault</Text>
+            <Text style={s.vaultTitle}>Health Records</Text>
             <Text style={s.vaultSub}>Choose whose records to open</Text>
 
             {/* Guardian's own vault */}
@@ -1029,7 +1029,7 @@ export default function GuardianHomeScreen() {
                 <Ionicons name="person" size={20} color="#1D4ED8" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.vaultRowName}>My Health Vault</Text>
+                <Text style={s.vaultRowName}>My Health Records</Text>
                 <Text style={s.vaultRowSub}>Your own medical records</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={G.muted} />

@@ -235,8 +235,12 @@ export default function AuthScreen({ initialTab, role }: { initialTab: Tab; role
 
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithGoogle();
-      router.replace("/(tabs)");
+      const result = await signInWithGoogle();
+      // On iOS, signInWithGoogle exchanges the code and returns the user — navigate now.
+      // On Android, auth-callback.tsx handles the exchange and navigation — do nothing.
+      if (result?.user) {
+        router.replace("/(tabs)");
+      }
     } catch (err: any) {
       if (err.message !== "The user canceled the sign-in flow.") {
         Alert.alert("Google Sign-In Error", err.message);

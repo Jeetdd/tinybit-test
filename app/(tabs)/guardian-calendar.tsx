@@ -180,7 +180,7 @@ export default function GuardianCalendarScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={s.container}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        <GuardianHeader title="Care Calendar" />
+        <GuardianHeader title="My Calendar" />
 
         <View style={s.sheet}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>

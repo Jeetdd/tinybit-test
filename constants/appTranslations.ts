@@ -143,7 +143,7 @@ const en: AppTranslations = {
   recording: "Recording… tap to stop", tapToRecord: "Tap Mic to Record",
   voiceRecorded: "✓ Voice recorded",
 
-  dailyCheckIn: "Daily Check-In",
+  dailyCheckIn: "Daily Wellness",
   allDoneToday: "All done for today! 🎉",
   alreadyCheckedIn: "You've already completed today's check-in. Come back tomorrow.",
   sathiTitle: "Sathi Ai Say...", sathiSub: "Your Voice AI companion",
@@ -192,7 +192,7 @@ const en: AppTranslations = {
   photoSent: "Your photo is on its way to your loved ones.",
   messageSent: "Your message has been shared with the family.",
 
-  mindGames: "Mind Games", yourBrainHealth: "Your Brain Health",
+  mindGames: "Brain Games", yourBrainHealth: "Your Brain Health",
   activateMind: "Activate Your Mind!", totalScore: "Total Score",
   streak: "Streak", rank: "Rank", timeMinutes: "Time (m)",
   todaysChallenge: "Today's Challenge", playGames: "Play Games",
@@ -208,7 +208,7 @@ const en: AppTranslations = {
   skipForNow: "Skip for now", saveThought: "Save My Thought",
   relaxationExercises: "Quick Relaxation", yourMoodSuggestions: "For You Today",
 
-  careCalendar: "Care Calendar", upcomingEvents: "Upcoming Events",
+  careCalendar: "My Calendar", upcomingEvents: "Upcoming Events",
   addEvent: "Add Event", noEventsToday: "No events today",
   noEventsScheduled: "No events scheduled",
   tapToAddEvent: "Tap + to add a doctor appointment,\nfamily visit, or wellness activity",
@@ -224,7 +224,7 @@ const hi: AppTranslations = {
   recording: "रिकॉर्डिंग… रोकने के लिए दबाएं", tapToRecord: "रिकॉर्ड करने के लिए माइक दबाएं",
   voiceRecorded: "✓ आवाज़ रिकॉर्ड हुई",
 
-  dailyCheckIn: "दैनिक जांच",
+  dailyCheckIn: "दैनिक स्वास्थ्य",
   allDoneToday: "आज का काम हो गया! 🎉",
   alreadyCheckedIn: "आपने आज की जांच पहले ही पूरी कर ली है। कल वापस आएं।",
   sathiTitle: "साथी AI कह रहा है...", sathiSub: "आपका वॉइस AI साथी",
@@ -273,7 +273,7 @@ const hi: AppTranslations = {
   photoSent: "आपकी फोटो आपके प्रियजनों के पास पहुंच रही है।",
   messageSent: "आपका संदेश परिवार के साथ साझा किया गया।",
 
-  mindGames: "मन के खेल", yourBrainHealth: "आपका मस्तिष्क स्वास्थ्य",
+  mindGames: "ब्रेन गेम्स", yourBrainHealth: "आपका मस्तिष्क स्वास्थ्य",
   activateMind: "अपने दिमाग को सक्रिय करें!", totalScore: "कुल स्कोर",
   streak: "लकीर", rank: "रैंक", timeMinutes: "समय (मि.)",
   todaysChallenge: "आज की चुनौती", playGames: "खेल खेलें",
@@ -289,7 +289,7 @@ const hi: AppTranslations = {
   skipForNow: "अभी छोड़ें", saveThought: "मेरी बात सहेजें",
   relaxationExercises: "त्वरित विश्राम", yourMoodSuggestions: "आज आपके लिए",
 
-  careCalendar: "देखभाल कैलेंडर", upcomingEvents: "आगामी कार्यक्रम",
+  careCalendar: "मेरा कैलेंडर", upcomingEvents: "आगामी कार्यक्रम",
   addEvent: "कार्यक्रम जोड़ें", noEventsToday: "आज कोई कार्यक्रम नहीं",
   noEventsScheduled: "कोई कार्यक्रम निर्धारित नहीं",
   tapToAddEvent: "+ दबाएं — डॉक्टर अपॉइंटमेंट,\nपरिवार मिलन या वेलनेस गतिविधि जोड़ें",
@@ -305,7 +305,7 @@ const gu: AppTranslations = {
   recording: "રેકૉર્ડિંગ... બંધ કરવા દબાવો", tapToRecord: "રેકૉર્ડ કરવા માઇક દબાવો",
   voiceRecorded: "✓ અવાજ રેકૉર્ડ થયો",
 
-  dailyCheckIn: "દૈનિક તપાસ",
+  dailyCheckIn: "દૈનિક સ્વાસ્થ્ય",
   allDoneToday: "આજ માટે બધું થઈ ગયું! 🎉",
   alreadyCheckedIn: "તમે આજની તપાસ પૂરી કરી છે. કાલે પાછા આવો.",
   sathiTitle: "સાથી AI કહે છે...", sathiSub: "તમારા AI સાથી",
@@ -354,7 +354,7 @@ const gu: AppTranslations = {
   photoSent: "તમારો ફોટો પ્રિયજનો સુધી પહોંચી રહ્યો છે.",
   messageSent: "તમારો સંદેશ પરિવાર સાથે શેર થઈ ગયો.",
 
-  mindGames: "મન ની રમત", yourBrainHealth: "તમારું મગજ સ્વાસ્થ્ય",
+  mindGames: "બ્રેઈન ગેમ્સ", yourBrainHealth: "તમારું મગજ સ્વાસ્થ્ય",
   activateMind: "તમારા મગજને સક્રિય કરો!", totalScore: "કુલ સ્કોર",
   streak: "ધારા", rank: "ક્રમ", timeMinutes: "સમય (મિ.)",
   todaysChallenge: "આજની પડકાર", playGames: "રમત રમો",
@@ -370,7 +370,7 @@ const gu: AppTranslations = {
   skipForNow: "અત્યારે છોડો", saveThought: "મારો વિચાર સહેજ",
   relaxationExercises: "ઝડપી આરામ", yourMoodSuggestions: "આજ તમારા માટે",
 
-  careCalendar: "સ્વાસ્થ્ય કૅલેન્ડર", upcomingEvents: "આગામી કાર્યક્રમ",
+  careCalendar: "મારો કૅલેન્ડર", upcomingEvents: "આગામી કાર્યક્રમ",
   addEvent: "કાર્યક્રમ ઉમેરો", noEventsToday: "આજ કોઈ કાર્યક્રમ નથી",
   noEventsScheduled: "કોઈ કાર્યક્રમ નિર્ધારિત નથી",
   tapToAddEvent: "+ દબાવો — ડૉક્ટર મુલાકાત,\nપરિવાર મિલન કે સ્વાસ્થ્ય ગતિવિધ ઉમેરો",
@@ -386,7 +386,7 @@ const ta: AppTranslations = {
   recording: "பதிவாகிறது… நிறுத்த அழுத்துங்கள்", tapToRecord: "பதிவு செய்ய மைக் அழுத்துங்கள்",
   voiceRecorded: "✓ குரல் பதிவாயிற்று",
 
-  dailyCheckIn: "தினசரி சோதனை",
+  dailyCheckIn: "தினசரி ஆரோக்கியம்",
   allDoneToday: "இன்றைக்கு முடிந்தது! 🎉",
   alreadyCheckedIn: "இன்றைய சோதனை முடித்துவிட்டீர்கள். நாளை திரும்பி வாருங்கள்.",
   sathiTitle: "சாதி AI சொல்கிறது...", sathiSub: "உங்கள் AI தோழர்",
@@ -435,7 +435,7 @@ const ta: AppTranslations = {
   photoSent: "உங்கள் புகைப்படம் உங்கள் அன்பானவர்களிடம் சென்றடைகிறது.",
   messageSent: "உங்கள் செய்தி குடும்பத்துடன் பகிரப்பட்டது.",
 
-  mindGames: "மன விளையாட்டு", yourBrainHealth: "உங்கள் மூளை ஆரோக்கியம்",
+  mindGames: "மூளை விளையாட்டுகள்", yourBrainHealth: "உங்கள் மூளை ஆரோக்கியம்",
   activateMind: "உங்கள் மனதை செயல்படுத்துங்கள்!", totalScore: "மொத்த மதிப்பெண்",
   streak: "தொடர்", rank: "தரம்", timeMinutes: "நேரம் (நி.)",
   todaysChallenge: "இன்றைய சவால்", playGames: "விளையாட்டு விளையாடு",
@@ -451,7 +451,7 @@ const ta: AppTranslations = {
   skipForNow: "இப்போது தவிர்", saveThought: "என் எண்ணத்தை சேமி",
   relaxationExercises: "விரைவு தளர்வு", yourMoodSuggestions: "இன்று உங்களுக்காக",
 
-  careCalendar: "பராமரிப்பு நாட்காட்டி", upcomingEvents: "வரவிருக்கும் நிகழ்வுகள்",
+  careCalendar: "என் நாட்காட்டி", upcomingEvents: "வரவிருக்கும் நிகழ்வுகள்",
   addEvent: "நிகழ்வு சேர்", noEventsToday: "இன்று நிகழ்வுகள் இல்லை",
   noEventsScheduled: "நிகழ்வுகள் திட்டமிடப்படவில்லை",
   tapToAddEvent: "+ அழுத்துங்கள் — மருத்துவர் நியமனம்,\nகுடும்ப வருகை அல்லது ஆரோக்கிய செயல்பாடு சேர்க்கவும்",
@@ -467,7 +467,7 @@ const bn: AppTranslations = {
   recording: "রেকর্ডিং... থামাতে চাপুন", tapToRecord: "রেকর্ড করতে মাইক চাপুন",
   voiceRecorded: "✓ কণ্ঠস্বর রেকর্ড হয়েছে",
 
-  dailyCheckIn: "দৈনিক চেক-ইন",
+  dailyCheckIn: "দৈনিক সুস্থতা",
   allDoneToday: "আজকের জন্য সব হয়ে গেছে! 🎉",
   alreadyCheckedIn: "আজকের চেক-ইন সম্পন্ন হয়েছে। কাল ফিরে আসুন।",
   sathiTitle: "সাথি AI বলছে...", sathiSub: "আপনার AI সঙ্গী",
@@ -516,7 +516,7 @@ const bn: AppTranslations = {
   photoSent: "আপনার ছবি প্রিয়জনদের কাছে পাঠানো হচ্ছে।",
   messageSent: "আপনার বার্তা পরিবারের সাথে শেয়ার হয়েছে।",
 
-  mindGames: "মন খেলা", yourBrainHealth: "আপনার মস্তিষ্ক স্বাস্থ্য",
+  mindGames: "ব্রেইন গেমস", yourBrainHealth: "আপনার মস্তিষ্ক স্বাস্থ্য",
   activateMind: "আপনার মন সক্রিয় করুন!", totalScore: "মোট স্কোর",
   streak: "ধারা", rank: "র‍্যাংক", timeMinutes: "সময় (মি.)",
   todaysChallenge: "আজকের চ্যালেঞ্জ", playGames: "খেলা খেলুন",
@@ -532,7 +532,7 @@ const bn: AppTranslations = {
   skipForNow: "এখন এড়িয়ে যান", saveThought: "আমার চিন্তা সংরক্ষণ করুন",
   relaxationExercises: "দ্রুত বিশ্রাম", yourMoodSuggestions: "আজ আপনার জন্য",
 
-  careCalendar: "পরিচর্যা ক্যালেন্ডার", upcomingEvents: "আসন্ন অনুষ্ঠান",
+  careCalendar: "আমার ক্যালেন্ডার", upcomingEvents: "আসন্ন অনুষ্ঠান",
   addEvent: "অনুষ্ঠান যোগ করুন", noEventsToday: "আজ কোনো অনুষ্ঠান নেই",
   noEventsScheduled: "কোনো অনুষ্ঠান নির্ধারিত নেই",
   tapToAddEvent: "+ চাপুন — ডাক্তারের নিয়োগ,\nপরিবার পরিদর্শন বা সুস্থতা কার্যক্রম যোগ করুন",
@@ -548,7 +548,7 @@ const mr: AppTranslations = {
   recording: "रेकॉर्डिंग... थांबवण्यासाठी दाबा", tapToRecord: "रेकॉर्ड करण्यासाठी माय दाबा",
   voiceRecorded: "✓ आवाज रेकॉर्ड झाली",
 
-  dailyCheckIn: "दैनंदिन तपासणी",
+  dailyCheckIn: "दैनंदिन स्वास्थ्य",
   allDoneToday: "आजचे काम झाले! 🎉",
   alreadyCheckedIn: "आजची तपासणी पूर्ण झाली आहे. उद्या परत या.",
   sathiTitle: "साथी AI सांगत आहे...", sathiSub: "तुमचा AI साथी",
@@ -597,7 +597,7 @@ const mr: AppTranslations = {
   photoSent: "तुमचा फोटो तुमच्या प्रियजनांकडे जात आहे.",
   messageSent: "तुमचा संदेश कुटुंबासोबत शेअर झाला.",
 
-  mindGames: "मनाचे खेळ", yourBrainHealth: "तुमचे मेंदू आरोग्य",
+  mindGames: "ब्रेन गेम्स", yourBrainHealth: "तुमचे मेंदू आरोग्य",
   activateMind: "तुमचा मेंदू सक्रिय करा!", totalScore: "एकूण गुण",
   streak: "सलग", rank: "क्रमांक", timeMinutes: "वेळ (मि.)",
   todaysChallenge: "आजचे आव्हान", playGames: "खेळ खेळा",
@@ -613,7 +613,7 @@ const mr: AppTranslations = {
   skipForNow: "आत्ता सोडा", saveThought: "माझा विचार जतन करा",
   relaxationExercises: "जलद विश्रांती", yourMoodSuggestions: "आज तुमच्यासाठी",
 
-  careCalendar: "काळजी दिनदर्शिका", upcomingEvents: "येणारे कार्यक्रम",
+  careCalendar: "माझे दिनदर्शिका", upcomingEvents: "येणारे कार्यक्रम",
   addEvent: "कार्यक्रम जोडा", noEventsToday: "आज कोणतेही कार्यक्रम नाहीत",
   noEventsScheduled: "कोणतेही कार्यक्रम निर्धारित नाहीत",
   tapToAddEvent: "+ दाबा — डॉक्टरांची भेट,\nकुटुंब भेट किंवा आरोग्य उपक्रम जोडा",

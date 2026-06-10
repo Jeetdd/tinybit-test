@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  TouchableOpacity,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -22,7 +23,7 @@ import { supabase } from "../../utils/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage, type Language } from "../../context/LanguageContext";
 
-type Medication = { id: number; name: string; dosage: string; timing: string };
+type Allergy = { id: number; name: string };
 
 type CondKey =
   | "none" | "diabetes" | "pre_diabetes" | "cholesterol" | "hypertension"
@@ -60,8 +61,8 @@ const ROWS: Condition[][] = (() => {
 
 type ScreenT = {
   title: string; subtitle: string;
-  conditionsLabel: string; medicationsLabel: string; addMedication: string;
-  medName: string; dosage: string; timing: string;
+  conditionsLabel: string; allergiesLabel: string;
+  allergiesYes: string; allergiesNo: string; addAllergy: string; allergyPlaceholder: string;
   doctorName: string; doctorContact: string;
   next: string; saving: string;
   othersPlaceholder: string;
@@ -73,9 +74,9 @@ const T: Partial<Record<Language, ScreenT>> = {
     title: "Medical Information",
     subtitle: "Help us understand your health better so we can support you more effectively.",
     conditionsLabel: "Any Medical Conditions?",
-    medicationsLabel: "Current Medications",
-    addMedication: "+ Add Medication",
-    medName: "Medicine Name", dosage: "Dosage (e.g. 500mg)", timing: "Timing (e.g. Morning)",
+    allergiesLabel: "Do you have any allergies?",
+    allergiesYes: "Yes", allergiesNo: "No",
+    addAllergy: "+ Add Allergy", allergyPlaceholder: "e.g. Penicillin, Peanuts, Dust",
     doctorName: "Doctor's Name", doctorContact: "Doctor's Contact Number",
     next: "Next", saving: "Saving...",
     othersPlaceholder: "Describe your condition (e.g. ABSIA, joint pain...)",
@@ -93,8 +94,9 @@ const T: Partial<Record<Language, ScreenT>> = {
     title: "चिकित्सा जानकारी",
     subtitle: "आपके स्वास्थ्य को बेहतर समझने में हमारी मदद करें।",
     conditionsLabel: "कोई स्वास्थ्य समस्या?",
-    medicationsLabel: "वर्तमान दवाएं", addMedication: "+ दवा जोड़ें",
-    medName: "दवा का नाम", dosage: "खुराक (जैसे 500mg)", timing: "समय (जैसे सुबह)",
+    allergiesLabel: "क्या आपको कोई एलर्जी है?",
+    allergiesYes: "हाँ", allergiesNo: "नहीं",
+    addAllergy: "+ एलर्जी जोड़ें", allergyPlaceholder: "जैसे पेनिसिलिन, मूंगफली, धूल",
     doctorName: "डॉक्टर का नाम", doctorContact: "डॉक्टर का नंबर",
     next: "आगे", saving: "सहेजा जा रहा है...",
     othersPlaceholder: "अपनी स्थिति बताएं...",
@@ -112,8 +114,9 @@ const T: Partial<Record<Language, ScreenT>> = {
     title: "તબીબી માહિતી",
     subtitle: "તમારા સ્વાસ્થ્યને વધુ સારી રીતે સમજવામાં અમારી મદદ કરો.",
     conditionsLabel: "કોઈ સ્વાસ્થ્ય સ્થિતિ?",
-    medicationsLabel: "વર્તમાન દવાઓ", addMedication: "+ દવા ઉમેરો",
-    medName: "દવાનું નામ", dosage: "ડોઝ (દા.ત. 500mg)", timing: "સમય (દા.ત. સવારે)",
+    allergiesLabel: "શું તમને કોઈ એલર્જી છે?",
+    allergiesYes: "હા", allergiesNo: "ના",
+    addAllergy: "+ એલર્જી ઉમેરો", allergyPlaceholder: "જેમ કે પેનિસિલિન, મગફળી, ધૂળ",
     doctorName: "ડૉક્ટરનું નામ", doctorContact: "ડૉક્ટરનો નંબર",
     next: "આગળ", saving: "સાચવી રહ્યા છીએ...",
     othersPlaceholder: "તમારી સ્થિતિ વર્ણવો...",
@@ -131,8 +134,9 @@ const T: Partial<Record<Language, ScreenT>> = {
     title: "மருத்துவ தகவல்",
     subtitle: "உங்கள் ஆரோக்கியத்தை நன்கு புரிந்துகொள்ள உதவுங்கள்.",
     conditionsLabel: "ஏதேனும் மருத்துவ நிலை?",
-    medicationsLabel: "தற்போதைய மருந்துகள்", addMedication: "+ மருந்து சேர்",
-    medName: "மருந்து பெயர்", dosage: "அளவு (எ.கா. 500mg)", timing: "நேரம் (எ.கா. காலை)",
+    allergiesLabel: "உங்களுக்கு ஏதேனும் ஒவ்வாமை உள்ளதா?",
+    allergiesYes: "ஆம்", allergiesNo: "இல்லை",
+    addAllergy: "+ ஒவ்வாமை சேர்", allergyPlaceholder: "எ.கா. பென்சிலின், வேர்க்கடலை, தூசு",
     doctorName: "மருத்துவர் பெயர்", doctorContact: "மருத்துவர் தொடர்பு எண்",
     next: "அடுத்து", saving: "சேமிக்கிறது...",
     othersPlaceholder: "உங்கள் நிலையை விவரிக்கவும்...",
@@ -150,8 +154,9 @@ const T: Partial<Record<Language, ScreenT>> = {
     title: "চিকিৎসা তথ্য",
     subtitle: "আপনার স্বাস্থ্য আরও ভালোভাবে বুঝতে আমাদের সাহায্য করুন।",
     conditionsLabel: "কোনো চিকিৎসা অবস্থা?",
-    medicationsLabel: "বর্তমান ওষুধ", addMedication: "+ ওষুধ যোগ করুন",
-    medName: "ওষুধের নাম", dosage: "ডোজ (যেমন 500mg)", timing: "সময় (যেমন সকাল)",
+    allergiesLabel: "আপনার কি কোনো অ্যালার্জি আছে?",
+    allergiesYes: "হ্যাঁ", allergiesNo: "না",
+    addAllergy: "+ অ্যালার্জি যোগ করুন", allergyPlaceholder: "যেমন পেনিসিলিন, বাদাম, ধুলো",
     doctorName: "ডাক্তারের নাম", doctorContact: "ডাক্তারের নম্বর",
     next: "পরবর্তী", saving: "সংরক্ষণ হচ্ছে...",
     othersPlaceholder: "আপনার অবস্থা বর্ণনা করুন...",
@@ -169,8 +174,9 @@ const T: Partial<Record<Language, ScreenT>> = {
     title: "वैद्यकीय माहिती",
     subtitle: "आपले आरोग्य अधिक चांगले समजण्यासाठी आम्हाला मदत करा.",
     conditionsLabel: "कोणतीही वैद्यकीय स्थिती?",
-    medicationsLabel: "सध्याची औषधे", addMedication: "+ औषध जोडा",
-    medName: "औषधाचे नाव", dosage: "मात्रा (उदा. 500mg)", timing: "वेळ (उदा. सकाळी)",
+    allergiesLabel: "तुम्हाला कोणतीही अ‍ॅलर्जी आहे का?",
+    allergiesYes: "होय", allergiesNo: "नाही",
+    addAllergy: "+ अ‍ॅलर्जी जोडा", allergyPlaceholder: "उदा. पेनिसिलिन, शेंगदाणे, धूळ",
     doctorName: "डॉक्टरचे नाव", doctorContact: "डॉक्टरचा नंबर",
     next: "पुढे", saving: "जतन होत आहे...",
     othersPlaceholder: "तुमची स्थिती सांगा...",
@@ -186,55 +192,19 @@ const T: Partial<Record<Language, ScreenT>> = {
   },
 };
 
-// ── Medication card extracted + memoized so only the changed card re-renders ──
-type MedCardProps = {
-  med: Medication;
-  index: number;
-  labels: Pick<ScreenT, "medName" | "dosage" | "timing">;
-  onUpdate: (id: number, field: keyof Omit<Medication, "id">, value: string) => void;
+// ── Allergy chip component ──
+type AllergyChipProps = {
+  allergy: Allergy;
   onRemove: (id: number) => void;
 };
 
-const MedicationCard = memo(function MedicationCard({
-  med, index, labels, onUpdate, onRemove,
-}: MedCardProps) {
+const AllergyChip = memo(function AllergyChip({ allergy, onRemove }: AllergyChipProps) {
   return (
-    <View style={styles.medCard}>
-      <View style={styles.medCardHeader}>
-        <Text style={styles.medCardNum}>#{index + 1}</Text>
-        <Pressable onPress={() => onRemove(med.id)} hitSlop={8}>
-          <Ionicons name="close-circle" size={20} color="#E53E3E" />
-        </Pressable>
-      </View>
-      <View style={styles.inputBox}>
-        <TextInput
-          style={styles.input}
-          placeholder={labels.medName}
-          placeholderTextColor="#B0BBC8"
-          value={med.name}
-          onChangeText={(v) => onUpdate(med.id, "name", v)}
-        />
-      </View>
-      <View style={styles.medRow}>
-        <View style={[styles.inputBox, { flex: 1 }]}>
-          <TextInput
-            style={styles.input}
-            placeholder={labels.dosage}
-            placeholderTextColor="#B0BBC8"
-            value={med.dosage}
-            onChangeText={(v) => onUpdate(med.id, "dosage", v)}
-          />
-        </View>
-        <View style={[styles.inputBox, { flex: 1 }]}>
-          <TextInput
-            style={styles.input}
-            placeholder={labels.timing}
-            placeholderTextColor="#B0BBC8"
-            value={med.timing}
-            onChangeText={(v) => onUpdate(med.id, "timing", v)}
-          />
-        </View>
-      </View>
+    <View style={styles.allergyChip}>
+      <Text style={styles.allergyChipText}>{allergy.name}</Text>
+      <TouchableOpacity onPress={() => onRemove(allergy.id)} hitSlop={8}>
+        <Ionicons name="close-circle" size={16} color="#E53E3E" />
+      </TouchableOpacity>
     </View>
   );
 });
@@ -248,16 +218,17 @@ export default function MedicalScreen() {
   // Memoize translation lookup — only recomputes when language changes
   const t = useMemo(() => (T[language] ?? T.English) as ScreenT, [language]);
 
-  const [selected,    setSelected]    = useState<Set<string>>(new Set());
-  const [otherText,   setOtherText]   = useState("");
-  const [medications, setMedications] = useState<Medication[]>([]);
-  const [docName,     setDocName]     = useState("");
-  const [docContact,  setDocContact]  = useState("");
-  const [docCountry,  setDocCountry]  = useState<Country>(DEFAULT_COUNTRY);
+  const [selected,      setSelected]      = useState<Set<string>>(new Set());
+  const [otherText,     setOtherText]     = useState("");
+  const [hasAllergies,  setHasAllergies]  = useState<boolean | null>(null);
+  const [allergies,     setAllergies]     = useState<Allergy[]>([]);
+  const [allergyInput,  setAllergyInput]  = useState("");
+  const [docName,       setDocName]       = useState("");
+  const [docContact,    setDocContact]    = useState("");
+  const [docCountry,    setDocCountry]    = useState<Country>(DEFAULT_COUNTRY);
   const [docPickerVisible, setDocPickerVisible] = useState(false);
-  const [loading,     setLoading]     = useState(false);
+  const [loading,       setLoading]       = useState(false);
 
-  // Stable id counter for medication items — avoids index-as-key issues
   const nextId = useRef(0);
 
   const toggle = useCallback((key: string) => {
@@ -270,28 +241,17 @@ export default function MedicalScreen() {
     });
   }, []);
 
-  const addMedication = useCallback(() => {
+  const addAllergy = useCallback(() => {
+    const name = allergyInput.trim();
+    if (!name) return;
     const id = nextId.current++;
-    setMedications((prev) => [...prev, { id, name: "", dosage: "", timing: "" }]);
-  }, []);
+    setAllergies((prev) => [...prev, { id, name }]);
+    setAllergyInput("");
+  }, [allergyInput]);
 
-  // Keyed by stable id — only the changed card re-renders
-  const updateMedication = useCallback(
-    (id: number, field: keyof Omit<Medication, "id">, value: string) =>
-      setMedications((prev) =>
-        prev.map((m) => m.id === id ? { ...m, [field]: value } : m)
-      ),
+  const removeAllergy = useCallback(
+    (id: number) => setAllergies((prev) => prev.filter((a) => a.id !== id)),
     []
-  );
-
-  const removeMedication = useCallback(
-    (id: number) => setMedications((prev) => prev.filter((m) => m.id !== id)),
-    []
-  );
-
-  const medLabels = useMemo(
-    () => ({ medName: t.medName, dosage: t.dosage, timing: t.timing }),
-    [t]
   );
 
   const canNext = selected.size > 0;
@@ -314,7 +274,8 @@ export default function MedicalScreen() {
           id:                 user.id,
           medical_conditions: Array.from(selected),
           other_condition:    selected.has("others") ? otherText.trim() : "",
-          medications:        medications.filter((m) => m.name.trim()),
+          has_allergies:      hasAllergies ?? false,
+          allergies:          hasAllergies ? allergies.map((a) => a.name) : [],
           doctor_name:        docName.trim(),
           doctor_contact:     docContact.trim() ? `${docCountry.dial} ${docContact.trim()}` : "",
         }, { onConflict: "id" });
@@ -422,22 +383,56 @@ export default function MedicalScreen() {
           </View>
         )}
 
-        {/* ── Current Medications ── */}
-        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>{t.medicationsLabel}</Text>
-        {medications.map((med, idx) => (
-          <MedicationCard
-            key={med.id}
-            med={med}
-            index={idx}
-            labels={medLabels}
-            onUpdate={updateMedication}
-            onRemove={removeMedication}
-          />
-        ))}
-        <Pressable onPress={addMedication} style={styles.addMedBtn}>
-          <Ionicons name="add-circle-outline" size={18} color="#2A4B8C" />
-          <Text style={styles.addMedText}>{t.addMedication}</Text>
-        </Pressable>
+        {/* ── Allergies ── */}
+        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>{t.allergiesLabel}</Text>
+        <View style={styles.allergyToggleRow}>
+          <Pressable
+            onPress={() => setHasAllergies(true)}
+            style={[styles.allergyToggleBtn, hasAllergies === true && styles.allergyToggleBtnActive]}
+          >
+            <Ionicons name="checkmark-circle" size={18} color={hasAllergies === true ? "#fff" : "#7A90A4"} />
+            <Text style={[styles.allergyToggleText, hasAllergies === true && styles.allergyToggleTextActive]}>
+              {t.allergiesYes}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { setHasAllergies(false); setAllergies([]); }}
+            style={[styles.allergyToggleBtn, hasAllergies === false && styles.allergyToggleBtnNo]}
+          >
+            <Ionicons name="close-circle" size={18} color={hasAllergies === false ? "#fff" : "#7A90A4"} />
+            <Text style={[styles.allergyToggleText, hasAllergies === false && styles.allergyToggleTextActive]}>
+              {t.allergiesNo}
+            </Text>
+          </Pressable>
+        </View>
+
+        {hasAllergies === true && (
+          <View style={styles.allergySection}>
+            <View style={styles.allergyInputRow}>
+              <View style={[styles.inputBox, { flex: 1 }]}>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t.allergyPlaceholder}
+                  placeholderTextColor="#B0BBC8"
+                  value={allergyInput}
+                  onChangeText={setAllergyInput}
+                  onSubmitEditing={addAllergy}
+                  returnKeyType="done"
+                />
+              </View>
+              <Pressable onPress={addAllergy} style={styles.allergyAddBtn}>
+                <Ionicons name="add" size={22} color="#fff" />
+              </Pressable>
+            </View>
+            {allergies.length > 0 && (
+              <View style={styles.allergyChipRow}>
+                {allergies.map((a) => (
+                  <AllergyChip key={a.id} allergy={a} onRemove={removeAllergy} />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ── Doctor Info ── */}
         <Text style={[styles.sectionLabel, { marginTop: 28 }]}>{t.doctorName}</Text>
@@ -562,6 +557,30 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   input: { fontSize: 15, fontWeight: "600", color: "#1A3050" },
+
+  allergyToggleRow: { flexDirection: "row", gap: 12, marginBottom: 4 },
+  allergyToggleBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingVertical: 14, borderRadius: 14,
+    backgroundColor: "#F8FAFC", borderWidth: 1.5, borderColor: "#DDE3EC",
+  },
+  allergyToggleBtnActive: { backgroundColor: "#3EA8D8", borderColor: "#3EA8D8" },
+  allergyToggleBtnNo: { backgroundColor: "#EF4444", borderColor: "#EF4444" },
+  allergyToggleText: { fontSize: 15, fontWeight: "700", color: "#7A90A4" },
+  allergyToggleTextActive: { color: "#fff" },
+  allergySection: { marginTop: 12 },
+  allergyInputRow: { flexDirection: "row", gap: 10, alignItems: "center", marginBottom: 12 },
+  allergyAddBtn: {
+    width: 50, height: 50, borderRadius: 14, backgroundColor: "#2A4B8C",
+    alignItems: "center", justifyContent: "center",
+  },
+  allergyChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  allergyChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "#EEF7FC", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1, borderColor: "#3EA8D8",
+  },
+  allergyChipText: { fontSize: 13, fontWeight: "700", color: "#2A4B8C" },
 
   footer: { paddingHorizontal: 24, paddingTop: 12, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#F0F3F7" },
   nextBtn:         { borderRadius: 28, overflow: "hidden" },

@@ -110,7 +110,7 @@ export default function MoodLiftScreen() {
   const { width } = useWindowDimensions();
 
   const { user } = useAuth();
-  const { language } = useLanguage();
+  const { language, colors: themeColors } = useLanguage();
   const t = tr(language);
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [savedMood,    setSavedMood]    = useState<string | null>(null);
@@ -197,13 +197,13 @@ export default function MoodLiftScreen() {
         <Text style={s.headerTitle}>{t.moodLift}</Text>
       </LinearGradient>
 
-      <View style={s.scrollSheet}>
+      <View style={[s.scrollSheet, { backgroundColor: themeColors.bg }]}>
       <ScrollView
         contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Daily Inspiration ── */}
-        <Animated.View entering={FadeInDown.delay(60)} style={s.insCard}>
+        <Animated.View entering={FadeInDown.delay(60)} style={[s.insCard, { backgroundColor: themeColors.card }]}>
           <Text style={s.insLabel}>{t.dailyInspiration}</Text>
           <Text style={s.insQuote}>
             {"“"}{ins.text}{"”"}
@@ -237,7 +237,7 @@ export default function MoodLiftScreen() {
                 onPress={() => handleMoodSelect(m.label)}
                 disabled={savingMood}
                 style={[
-                  s.moodCard, { width: moodW },
+                  s.moodCard, { width: moodW, backgroundColor: themeColors.card },
                   isSelected && s.moodCardActive,
                   isSaved    && { borderColor: '#16A34A' },
                 ]}
@@ -265,7 +265,7 @@ export default function MoodLiftScreen() {
 
         {/* ── Mood Suggestions ── */}
         {suggestions.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(60)} style={[s.suggestCard, { marginHorizontal: hPad }]}>
+          <Animated.View entering={FadeInDown.delay(60)} style={[s.suggestCard, { marginHorizontal: hPad, backgroundColor: themeColors.card }]}>
             <Text style={s.suggestTitle}>
               {selectedMood === 'Happy' ? '😊 You seem happy!' :
                selectedMood === 'Tired' ? '😴 Feeling tired?' :
@@ -293,7 +293,7 @@ export default function MoodLiftScreen() {
           {EXPLORE.map((item, i) => (
             <Animated.View key={item.id} entering={FadeInDown.delay(220 + i * 55)}>
               <Pressable
-                style={[s.exploreCard, { width: exploreW }]}
+                style={[s.exploreCard, { width: exploreW, backgroundColor: themeColors.card }]}
                 onPress={() => router.push({ pathname: "/mood-library", params: { type: item.id, title: item.title } })}
               >
                 <View style={[s.exploreBadge, { backgroundColor: item.badge }]}>
@@ -313,7 +313,7 @@ export default function MoodLiftScreen() {
         </View>
 
         {RELAXATION_EXERCISES.map((ex, i) => (
-          <Animated.View key={ex.id} entering={FadeInDown.delay(460 + i * 60)} style={[s.relaxCard, { marginHorizontal: hPad, marginBottom: 12 }]}>
+          <Animated.View key={ex.id} entering={FadeInDown.delay(460 + i * 60)} style={[s.relaxCard, { marginHorizontal: hPad, marginBottom: 12, backgroundColor: themeColors.card }]}>
             <View style={[s.relaxIcon, { backgroundColor: ex.color }]}>
               <Ionicons name={ex.icon} size={26} color={C.white} />
             </View>
@@ -334,7 +334,7 @@ export default function MoodLiftScreen() {
       <Modal visible={showNoteModal} transparent animationType="slide">
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <View style={s.modalOverlay}>
-            <View style={s.modalCard}>
+            <View style={[s.modalCard, { backgroundColor: themeColors.card }]}>
               {savedMood && MOOD_MODAL[savedMood] ? (
                 <>
                   <Text style={s.modalTitle}>

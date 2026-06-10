@@ -294,6 +294,7 @@ export default function MindGamesScreen() {
 }
 
 function NumberMemoryGame({ onClose, onWin }: any) {
+  const { colors: tc } = useLanguage();
   const [step, setStep] = useState<'show' | 'input'>('show');
   const [num, setNum] = useState("");
   const [input, setInput] = useState("");
@@ -308,7 +309,7 @@ function NumberMemoryGame({ onClose, onWin }: any) {
   };
   return (
     <Modal transparent animationType="fade">
-      <View style={game.overlay}><View style={game.content}>
+      <View style={game.overlay}><View style={[game.content, { backgroundColor: tc.card }]}>
           <Text style={game.title}>Number Memory</Text>
           {step === 'show' ? <Text style={game.bigNum}>{num}</Text> : <View style={{ width: '100%' }}>
               <TextInput style={game.input} keyboardType="number-pad" value={input} onChangeText={setInput} autoFocus maxLength={4} />
@@ -321,6 +322,7 @@ function NumberMemoryGame({ onClose, onWin }: any) {
 }
 
 function WordMatchGame({ onClose, onWin }: any) {
+  const { colors: tc } = useLanguage();
   const [gd] = useState(() => {
     const sel = [...WORD_PAIRS].sort(() => Math.random() - 0.5).slice(0, 4);
     return {
@@ -350,7 +352,7 @@ function WordMatchGame({ onClose, onWin }: any) {
 
   return (
     <Modal transparent animationType="fade">
-      <View style={game.overlay}><View style={game.content}>
+      <View style={game.overlay}><View style={[game.content, { backgroundColor: tc.card }]}>
         <TouchableOpacity style={game.close} onPress={onClose}><Ionicons name="close" size={24} color="#666" /></TouchableOpacity>
         <Text style={game.title}>Word Match</Text>
         <Text style={game.subText}>{done.length}/{gd.pairs.length} matched · Tap left then right</Text>
@@ -378,6 +380,7 @@ function WordMatchGame({ onClose, onWin }: any) {
 }
 
 function ColorRecallGame({ onClose, onWin }: any) {
+  const { colors: tc } = useLanguage();
   const [gd] = useState(() => {
     const cols = [...COLOR_LIST].sort(() => Math.random() - 0.5).slice(0, 4);
     const tgt  = Math.floor(Math.random() * 4);
@@ -411,7 +414,7 @@ function ColorRecallGame({ onClose, onWin }: any) {
 
   return (
     <Modal transparent animationType="fade">
-      <View style={game.overlay}><View style={game.content}>
+      <View style={game.overlay}><View style={[game.content, { backgroundColor: tc.card }]}>
         <TouchableOpacity style={game.close} onPress={onClose}><Ionicons name="close" size={24} color="#666" /></TouchableOpacity>
         <Text style={game.title}>Colour Recall</Text>
         {phase === 'show' ? (
@@ -445,6 +448,7 @@ function ColorRecallGame({ onClose, onWin }: any) {
 }
 
 function StoryQuizGame({ onClose, onWin }: any) {
+  const { colors: tc } = useLanguage();
   const [idx,      setIdx]      = useState(0);
   const [score,    setScore]    = useState(0);
   const [pick,     setPick]     = useState<string | null>(null);
@@ -464,7 +468,7 @@ function StoryQuizGame({ onClose, onWin }: any) {
 
   return (
     <Modal transparent animationType="fade">
-      <View style={game.overlay}><View style={game.content}>
+      <View style={game.overlay}><View style={[game.content, { backgroundColor: tc.card }]}>
         <TouchableOpacity style={game.close} onPress={onClose}><Ionicons name="close" size={24} color="#666" /></TouchableOpacity>
         {finished ? (
           <>
@@ -504,6 +508,7 @@ function StoryQuizGame({ onClose, onWin }: any) {
 /* ── Reaction Time Game ──────────────────────────────────── */
 
 function ReactionTimeGame({ onClose, onWin }: any) {
+  const { colors: tc } = useLanguage();
   const [phase, setPhase] = useState<'wait' | 'go' | 'early' | 'done'>('wait');
   const [result, setResult] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -547,7 +552,7 @@ function ReactionTimeGame({ onClose, onWin }: any) {
 
   return (
     <Modal transparent animationType="fade">
-      <View style={game.overlay}><View style={game.content}>
+      <View style={game.overlay}><View style={[game.content, { backgroundColor: tc.card }]}>
         <TouchableOpacity style={game.close} onPress={onClose}><Ionicons name="close" size={24} color="#666" /></TouchableOpacity>
         <Text style={game.title}>Reaction Time</Text>
         <Text style={game.subText}>{msg}</Text>
@@ -572,6 +577,7 @@ const reactionS = StyleSheet.create({
 /* ── Memory Tiles Game ───────────────────────────────────── */
 
 function MemoryTilesGame({ onClose, onWin }: any) {
+  const { colors: tc } = useLanguage();
   const [tiles, setTiles] = useState(() =>
     [...TILE_EMOJIS, ...TILE_EMOJIS]
       .sort(() => Math.random() - 0.5)
@@ -608,7 +614,7 @@ function MemoryTilesGame({ onClose, onWin }: any) {
 
   return (
     <Modal transparent animationType="fade">
-      <View style={game.overlay}><View style={[game.content, { paddingHorizontal: 16 }]}>
+      <View style={game.overlay}><View style={[game.content, { paddingHorizontal: 16, backgroundColor: tc.card }]}>
         <TouchableOpacity style={game.close} onPress={onClose}><Ionicons name="close" size={24} color="#666" /></TouchableOpacity>
         <Text style={game.title}>Memory Tiles</Text>
         <Text style={game.subText}>{matchedCount / 2}/{TILE_EMOJIS.length} pairs matched</Text>
@@ -646,6 +652,7 @@ const tilesS = StyleSheet.create({
 /* ── Typing Speed Game ───────────────────────────────────── */
 
 function TypingSpeedGame({ onClose, onWin }: any) {
+  const { colors: tc } = useLanguage();
   const [sentence] = useState(() => TYPING_SENTENCES[Math.floor(Math.random() * TYPING_SENTENCES.length)]);
   const [input, setInput] = useState('');
   const startRef = useRef<number | null>(null);
@@ -669,7 +676,7 @@ function TypingSpeedGame({ onClose, onWin }: any) {
 
   return (
     <Modal transparent animationType="fade">
-      <View style={game.overlay}><View style={game.content}>
+      <View style={game.overlay}><View style={[game.content, { backgroundColor: tc.card }]}>
         <TouchableOpacity style={game.close} onPress={onClose}><Ionicons name="close" size={24} color="#666" /></TouchableOpacity>
         <Text style={game.title}>Typing Speed</Text>
         <View style={typingS.prompt}>

@@ -53,11 +53,11 @@ const HT: Partial<Record<Language, HomeT>> = {
     hello: "Hello,", sathiAiSay: "Sathi Ai Say...", voiceCompanion: "Your Voice AI companion",
     talkToSathi: "Talk to Sathi", stop: "Stop", thinking: "Thinking...", listening: "Listening...",
     todayAtAGlance: "Today at a Glance", mood: "Mood", medicine: "Medicine", streak: "Streak",
-    emergencyHelp: "Emergency Help", guardian: "Guardian", medicalService: "Medical Service", pressFor3Sec: "Press for 3 seconds",
+    emergencyHelp: "Emergency Help", guardian: "Guardian", medicalService: "Medical Service", pressFor3Sec: "Click Here",
     todaysMedicine: "Today's Medicine", viewAll: "View all", dailyMedicines: "Daily Medicines", taken: "taken", complete: "Complete",
     whatWouldYouLike: "What would you like?", allFeatures: "All Features",
-    healthVault: "Health Vault", careCalendar: "Care Calendar", memoryJournal: "Memory Journal",
-    mindGames: "Mind Games", moodLift: "Mood Lift", dailyCheckIn: "Daily Check-In",
+    healthVault: "Health Records", careCalendar: "My Calendar", memoryJournal: "My Memories",
+    mindGames: "Brain Games", moodLift: "Mood Lift", dailyCheckIn: "Daily Wellness",
     todaysSurprise: "Today's Surprise", memoryPrompt: "Memory Prompt", recordYourMemory: "Record your memory",
     yourStreak: "Your Streak", dayStreak: "Day Streak!", onTheRightTrack: "You are on the right track",
     voiceMessageFrom: "Voice message from", tapToListen: "Tap to listen", playRecording: "Play Recording",
@@ -68,11 +68,11 @@ const HT: Partial<Record<Language, HomeT>> = {
     hello: "नमस्ते,", sathiAiSay: "साथी AI कहता है...", voiceCompanion: "आपका वॉइस AI साथी",
     talkToSathi: "साथी से बात करें", stop: "रोकें", thinking: "सोच रहा है...", listening: "सुन रहा है...",
     todayAtAGlance: "आज की झलक", mood: "मूड", medicine: "दवाई", streak: "स्ट्रीक",
-    emergencyHelp: "आपातकालीन सहायता", guardian: "अभिभावक", medicalService: "चिकित्सा सेवा", pressFor3Sec: "3 सेकंड दबाएं",
+    emergencyHelp: "आपातकालीन सहायता", guardian: "अभिभावक", medicalService: "चिकित्सा सेवा", pressFor3Sec: "यहाँ क्लिक करें",
     todaysMedicine: "आज की दवाइयां", viewAll: "सभी देखें", dailyMedicines: "दैनिक दवाइयां", taken: "ली गई", complete: "पूर्ण",
     whatWouldYouLike: "आप क्या चाहते हैं?", allFeatures: "सभी सुविधाएं",
-    healthVault: "स्वास्थ्य वॉल्ट", careCalendar: "केयर कैलेंडर", memoryJournal: "यादों की डायरी",
-    mindGames: "मानसिक खेल", moodLift: "मूड लिफ्ट", dailyCheckIn: "दैनिक चेक-इन",
+    healthVault: "स्वास्थ्य रिकॉर्ड", careCalendar: "मेरा कैलेंडर", memoryJournal: "मेरी यादें",
+    mindGames: "ब्रेन गेम्स", moodLift: "मूड लिफ्ट", dailyCheckIn: "दैनिक स्वास्थ्य",
     todaysSurprise: "आज का सरप्राइज", memoryPrompt: "यादों का संकेत", recordYourMemory: "अपनी याद रिकॉर्ड करें",
     yourStreak: "आपकी स्ट्रीक", dayStreak: "दिन की स्ट्रीक!", onTheRightTrack: "आप सही राह पर हैं",
     voiceMessageFrom: "से वॉइस संदेश", tapToListen: "सुनने के लिए टैप करें", playRecording: "रिकॉर्डिंग चलाएं",
@@ -83,11 +83,11 @@ const HT: Partial<Record<Language, HomeT>> = {
     hello: "નમસ્તે,", sathiAiSay: "સાથી AI કહે છે...", voiceCompanion: "તમારો વૉઇસ AI સાથી",
     talkToSathi: "સાથી સાથે વાત કરો", stop: "બંધ", thinking: "વિચારી રહ્યો છે...", listening: "સાંભળી રહ્યો છે...",
     todayAtAGlance: "આજની ઝલક", mood: "મૂડ", medicine: "દવા", streak: "સ્ટ્રીક",
-    emergencyHelp: "કટોકટી સહાય", guardian: "વાલી", medicalService: "તબીબી સેવા", pressFor3Sec: "3 સેકન્ડ દબાવો",
+    emergencyHelp: "કટોકટી સહાય", guardian: "વાલી", medicalService: "તબીબી સેવા", pressFor3Sec: "અહીં ક્લિક કરો",
     todaysMedicine: "આજની દવાઓ", viewAll: "બધું જુઓ", dailyMedicines: "દૈનિક દવાઓ", taken: "લીધી", complete: "પૂર્ણ",
     whatWouldYouLike: "તમે શું ઇચ્છો છો?", allFeatures: "બધી સુવિધાઓ",
-    healthVault: "સ્વાસ્થ્ય વૉલ્ટ", careCalendar: "કૅર કૅલેન્ડર", memoryJournal: "યાદો ડાયરી",
-    mindGames: "મનોરંજક રમતો", moodLift: "મૂડ લિફ્ટ", dailyCheckIn: "દૈનિક ચેક-ઇન",
+    healthVault: "સ્વાસ્થ્ય રેકૉર્ડ", careCalendar: "મારો કૅલેન્ડર", memoryJournal: "મારી યાદો",
+    mindGames: "બ્રેઈન ગેમ્સ", moodLift: "મૂડ લિફ્ટ", dailyCheckIn: "દૈનિક સ્વાસ્થ્ય",
     todaysSurprise: "આજનો સરપ્રાઇઝ", memoryPrompt: "યાદ સૂચના", recordYourMemory: "તમારી યાદ રેકૉર્ડ કરો",
     yourStreak: "તમારી સ્ટ્રીક", dayStreak: "દિવસ સ્ટ્રીક!", onTheRightTrack: "તમે સાચા રસ્તે છો",
     voiceMessageFrom: "તરફથી વૉઇસ સંદેશ", tapToListen: "સાંભળવા ટૅપ કરો", playRecording: "રેકૉર્ડિંગ ચલાવો",
@@ -98,11 +98,11 @@ const HT: Partial<Record<Language, HomeT>> = {
     hello: "வணக்கம்,", sathiAiSay: "சாதி AI சொல்கிறது...", voiceCompanion: "உங்கள் குரல் AI தோழர்",
     talkToSathi: "சாதியிடம் பேசுங்கள்", stop: "நிறுத்து", thinking: "சிந்திக்கிறது...", listening: "கேட்கிறது...",
     todayAtAGlance: "இன்றைய பார்வை", mood: "மனநிலை", medicine: "மருந்து", streak: "தொடர்",
-    emergencyHelp: "அவசர உதவி", guardian: "பாதுகாவலர்", medicalService: "மருத்துவ சேவை", pressFor3Sec: "3 வினாடி அழுத்துங்கள்",
+    emergencyHelp: "அவசர உதவி", guardian: "பாதுகாவலர்", medicalService: "மருத்துவ சேவை", pressFor3Sec: "இங்கே கிளிக் செய்யுங்கள்",
     todaysMedicine: "இன்றைய மருந்துகள்", viewAll: "அனைத்தும் காண்க", dailyMedicines: "தினசரி மருந்துகள்", taken: "எடுக்கப்பட்டது", complete: "முடிந்தது",
     whatWouldYouLike: "நீங்கள் என்ன விரும்புகிறீர்கள்?", allFeatures: "அனைத்து அம்சங்கள்",
-    healthVault: "சுகாதார பெட்டகம்", careCalendar: "பராமரிப்பு நாட்காட்டி", memoryJournal: "நினைவு நாட்குறிப்பு",
-    mindGames: "மன விளையாட்டு", moodLift: "மனநிலை உயர்வு", dailyCheckIn: "தினசரி சரிபார்ப்பு",
+    healthVault: "சுகாதார பதிவுகள்", careCalendar: "என் நாட்காட்டி", memoryJournal: "என் நினைவுகள்",
+    mindGames: "மூளை விளையாட்டுகள்", moodLift: "மனநிலை உயர்வு", dailyCheckIn: "தினசரி ஆரோக்கியம்",
     todaysSurprise: "இன்றைய ஆச்சரியம்", memoryPrompt: "நினைவு தூண்டுதல்", recordYourMemory: "உங்கள் நினைவை பதிவு செய்யுங்கள்",
     yourStreak: "உங்கள் தொடர்", dayStreak: "நாள் தொடர்!", onTheRightTrack: "நீங்கள் சரியான பாதையில் இருக்கிறீர்கள்",
     voiceMessageFrom: "இலிருந்து குரல் செய்தி", tapToListen: "கேட்க தட்டுங்கள்", playRecording: "பதிவை இயக்கு",
@@ -113,11 +113,11 @@ const HT: Partial<Record<Language, HomeT>> = {
     hello: "নমস্কার,", sathiAiSay: "সাথি AI বলছে...", voiceCompanion: "আপনার ভয়েস AI সঙ্গী",
     talkToSathi: "সাথির সাথে কথা বলুন", stop: "থামান", thinking: "ভাবছে...", listening: "শুনছে...",
     todayAtAGlance: "আজকের একনজর", mood: "মেজাজ", medicine: "ওষুধ", streak: "ধারা",
-    emergencyHelp: "জরুরী সাহায্য", guardian: "অভিভাবক", medicalService: "চিকিৎসা সেবা", pressFor3Sec: "৩ সেকেন্ড চাপুন",
+    emergencyHelp: "জরুরী সাহায্য", guardian: "অভিভাবক", medicalService: "চিকিৎসা সেবা", pressFor3Sec: "এখানে ক্লিক করুন",
     todaysMedicine: "আজকের ওষুধ", viewAll: "সব দেখুন", dailyMedicines: "দৈনিক ওষুধ", taken: "নেওয়া হয়েছে", complete: "সম্পন্ন",
     whatWouldYouLike: "আপনি কী চান?", allFeatures: "সব বৈশিষ্ট্য",
-    healthVault: "স্বাস্থ্য ভল্ট", careCalendar: "যত্ন ক্যালেন্ডার", memoryJournal: "স্মৃতি ডায়েরি",
-    mindGames: "মস্তিষ্কের খেলা", moodLift: "মেজাজ উন্নতি", dailyCheckIn: "দৈনিক চেক-ইন",
+    healthVault: "স্বাস্থ্য রেকর্ড", careCalendar: "আমার ক্যালেন্ডার", memoryJournal: "আমার স্মৃতি",
+    mindGames: "ব্রেইন গেমস", moodLift: "মেজাজ উন্নতি", dailyCheckIn: "দৈনিক সুস্থতা",
     todaysSurprise: "আজকের বিস্ময়", memoryPrompt: "স্মৃতির ইঙ্গিত", recordYourMemory: "আপনার স্মৃতি রেকর্ড করুন",
     yourStreak: "আপনার ধারা", dayStreak: "দিনের ধারা!", onTheRightTrack: "আপনি সঠিক পথে আছেন",
     voiceMessageFrom: "থেকে ভয়েস বার্তা", tapToListen: "শুনতে ট্যাপ করুন", playRecording: "রেকর্ডিং চালান",
@@ -128,11 +128,11 @@ const HT: Partial<Record<Language, HomeT>> = {
     hello: "नमस्कार,", sathiAiSay: "साथी AI म्हणतो...", voiceCompanion: "तुमचा व्हॉइस AI साथी",
     talkToSathi: "साथीशी बोला", stop: "थांबवा", thinking: "विचार करत आहे...", listening: "ऐकत आहे...",
     todayAtAGlance: "आजचा आढावा", mood: "मनःस्थिती", medicine: "औषध", streak: "स्ट्रीक",
-    emergencyHelp: "आपत्कालीन मदत", guardian: "पालक", medicalService: "वैद्यकीय सेवा", pressFor3Sec: "3 सेकंद दाबा",
+    emergencyHelp: "आपत्कालीन मदत", guardian: "पालक", medicalService: "वैद्यकीय सेवा", pressFor3Sec: "येथे क्लिक करा",
     todaysMedicine: "आजची औषधे", viewAll: "सर्व पाहा", dailyMedicines: "दैनंदिन औषधे", taken: "घेतली", complete: "पूर्ण",
     whatWouldYouLike: "तुम्हाला काय हवे आहे?", allFeatures: "सर्व वैशिष्ट्ये",
-    healthVault: "आरोग्य व्हॉल्ट", careCalendar: "काळजी कॅलेंडर", memoryJournal: "आठवणी डायरी",
-    mindGames: "मनाचे खेळ", moodLift: "मनःस्थिती उन्नती", dailyCheckIn: "दैनंदिन चेक-इन",
+    healthVault: "आरोग्य नोंदी", careCalendar: "माझे दिनदर्शिका", memoryJournal: "माझ्या आठवणी",
+    mindGames: "ब्रेन गेम्स", moodLift: "मनःस्थिती उन्नती", dailyCheckIn: "दैनंदिन स्वास्थ्य",
     todaysSurprise: "आजचा आश्चर्य", memoryPrompt: "आठवणीचे संकेत", recordYourMemory: "तुमची आठवण रेकॉर्ड करा",
     yourStreak: "तुमची स्ट्रीक", dayStreak: "दिवस स्ट्रीक!", onTheRightTrack: "तुम्ही योग्य मार्गावर आहात",
     voiceMessageFrom: "कडून व्हॉइस संदेश", tapToListen: "ऐकण्यासाठी टॅप करा", playRecording: "रेकॉर्डिंग चालवा",
@@ -172,7 +172,7 @@ export default function HomeScreen() {
 
 function ElderHomeScreen() {
   const router = useRouter();
-  const { profile, streak, user, logout } = useAuth();
+  const { profile, user, logout, streak } = useAuth();
   const insets = useSafeAreaInsets();
   const { language, fontScale, colors: themeColors } = useLanguage();
   const ht = (HT[language] ?? HT.English) as HomeT;
@@ -295,6 +295,24 @@ function ElderHomeScreen() {
     email: profile?.email || user?.email,
   });
   const userName = profile?.fullName || firstName || user?.email?.split('@')[0] || "there";
+
+  // Streak week calendar — last 7 days, highlight days within streak count
+  const weekDays = useMemo(() => {
+    const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const today = new Date();
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() - (6 - i));
+      const daysAgo = 6 - i;
+      return {
+        label: DAYS_SHORT[d.getDay()],
+        num: d.getDate(),
+        active: daysAgo < streak,
+        isToday: daysAgo === 0,
+      };
+    });
+  }, [streak]);
+
   const guardianEmergencyNumber = profile?.emergencyPhone?.trim() || "";
   const guardianEmergencyLabel = profile?.emergencyRelation?.trim() || ht.guardian;
   const countryEmergency = getCountryEmergency(profile?.countryCode || "");
@@ -344,17 +362,6 @@ function ElderHomeScreen() {
 
   const totalCount = medicines.length;
   const progressPercent = medicines.length > 0 ? (takenCount / medicines.length) * 100 : 0;
-
-  const streakToday = new Date();
-  const streakDow = streakToday.getDay();
-  const mondayOffset = streakDow === 0 ? -6 : 1 - streakDow;
-  const monday = new Date(streakToday);
-  monday.setDate(streakToday.getDate() + mondayOffset);
-  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((dayLabel, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return { dayLabel, dayNum: d.getDate(), isToday: d.toDateString() === streakToday.toDateString() };
-  });
 
   const pendingMedicines = medicines.filter((med) => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -609,7 +616,7 @@ function ElderHomeScreen() {
           <View style={s.glanceRow}>
             <GlanceCard title={ht.mood} color="#3FA4DA" img={require('../../assets/images/Mood.png')} value={todayMood} onPress={() => router.push('/mood-lift')} />
             <GlanceCard title={ht.medicine} color="#4DB6AC" img={require('../../assets/images/Medicine.png')} value={`${takenCount}/${totalCount}`} onPress={() => router.push('/(tabs)/medicine')} />
-            <GlanceCard title={ht.streak} color="#FF8A65" img={require('../../assets/images/Streak.png')} value={streak.toString()} onPress={() => router.push('/streak' as any)} />
+            <GlanceCard title={ht.streak} color="#F97316" img={require('../../assets/images/Streak.png')} value={`${streak} 🔥`} onPress={() => router.push('/streak')} />
           </View>
 
           {/* 6 — What would you like? */}
@@ -618,12 +625,12 @@ function ElderHomeScreen() {
             <Pressable><Text style={s.sectionActionLink}>{ht.allFeatures}</Text></Pressable>
           </View>
           <View style={s.grid}>
-            <GridItem title={ht.healthVault} sub="" color="#4DB6AC" img={require('../../assets/images/HealthVault.png')} target="/health-vault" />
-            <GridItem title={ht.careCalendar} sub="" color="#64B5F6" img={require('../../assets/images/CareCalender.png')} target="/care-calendar" />
-            <GridItem title={ht.memoryJournal} sub="" color="#FF8A65" img={require('../../assets/images/MemoryJournal.png')} target="/journal" />
-            <GridItem title={ht.mindGames} sub="" color="#546E7A" img={require('../../assets/images/MindGames.png')} target="/mind-games" />
-            <GridItem title={ht.moodLift} sub="" color="#81C784" img={require('../../assets/images/MoodLift.png')} target="/mood-lift" />
-            <GridItem title={ht.dailyCheckIn} sub="" color="#BA68C8" img={require('../../assets/images/DailyCheckIn.png')} target="/daily-check-in" />
+            <GridItem title={ht.healthVault} sub="Medical history & docs" color="#0D9488" img={require('../../assets/images/health_records.png')} target="/health-vault" />
+            <GridItem title={ht.careCalendar} sub="Appointments & reminders" color="#0EA5E9" img={require('../../assets/images/my_calendar.png')} target="/care-calendar" />
+            <GridItem title={ht.memoryJournal} sub="Journal & diary" color="#F97316" img={require('../../assets/images/my_memories.png')} target="/journal" />
+            <GridItem title={ht.mindGames} sub="Puzzles & exercises" color="#475569" img={require('../../assets/images/brain_games.png')} target="/mind-games" />
+            <GridItem title={ht.moodLift} sub="Track & boost your mood" color="#22C55E" img={require('../../assets/images/mood_lift.png')} target="/mood-lift" />
+            <GridItem title={ht.dailyCheckIn} sub="Daily health check-in" color="#A855F7" img={require('../../assets/images/daily_wellness.png')} target="/daily-check-in" />
           </View>
 
           {/* 6b — Health Tools Row */}
@@ -631,10 +638,10 @@ function ElderHomeScreen() {
             <Text style={[s.sectionTitle, { color: themeColors.text }]}>Health Tools</Text>
           </View>
           <View style={s.toolsGrid}>
-            <ToolCard emoji="🏥" title="Health Log" sub="Medicine, mood, vitals" color="#1E3A5F" target="/(tabs)/health-log" />
-            <ToolCard emoji="🌤️" title="Weather" sub="Clothing suggestions" color="#F59E0B" target="/weather" />
-            <ToolCard emoji="🥗" title="Calorie Scan" sub="AI food scanner" color="#16A34A" target="/calorie-calculator" />
-            <ToolCard emoji="🎓" title="Help & Tutorials" sub="Learn how to use" color="#8B5CF6" target="/help" />
+            <ToolCard img={require('../../assets/images/health_log.png')} title="Health Log" sub="Vitals, sleep, water" color="#EF4444" target="/(tabs)/health-log" />
+            <ToolCard img={require('../../assets/images/weather.png')} title="Weather" sub="Clothing suggestions" color="#F59E0B" target="/weather" />
+            <ToolCard img={require('../../assets/images/calorie_tracker.png')} title="Calorie Tracker" sub="Food & nutrition" color="#16A34A" target="/calorie-calculator" />
+            <ToolCard img={require('../../assets/images/help_guide.png')} title="Help & Guide" sub="Learn how to use" color="#6366F1" target="/help" />
           </View>
 
           {/* 7 — Record your Memory */}
@@ -659,31 +666,31 @@ function ElderHomeScreen() {
             </Pressable>
           </View>
 
-          {/* 8 — Your Streak */}
+          {/* — Streak — */}
           <View style={[s.sectionHeader, { marginTop: 25 }]}>
             <Text style={[s.sectionTitle, { color: themeColors.text }]}>{ht.yourStreak}</Text>
           </View>
           <View style={s.streakWrapper}>
             <View style={s.streakIconCircle}>
-              <Image source={require('../../assets/images/Streak.png')} style={{ width: 52, height: 52 }} resizeMode="contain" />
+              <Text style={{ fontSize: 32 }}>🔥</Text>
             </View>
             <View style={[s.streakCard, { backgroundColor: themeColors.card }]}>
               <Text style={[s.streakTitle, { color: themeColors.text }]}>{streak} {ht.dayStreak}</Text>
               <Text style={[s.streakSub, { color: themeColors.muted }]}>{ht.onTheRightTrack}</Text>
               <View style={s.calendarRow}>
-                {weekDays.map(({ dayLabel, dayNum, isToday }, i) => {
-                  const hasFire = i < streak;
-                  return (
-                    <View key={dayLabel} style={s.calendarDay}>
-                      <Text style={[s.dayText, isToday && { color: '#E53935', fontWeight: '800' }]}>{dayLabel}</Text>
-                      {hasFire ? (
-                        <Text style={{ fontSize: 22 }}>🔥</Text>
-                      ) : (
-                        <Text style={[s.dayNum, isToday && { color: '#E53935' }]}>{dayNum}</Text>
-                      )}
+                {weekDays.map((d, i) => (
+                  <View key={i} style={s.calendarDay}>
+                    <Text style={[s.dayText, { color: themeColors.muted }]}>{d.label}</Text>
+                    <View style={{
+                      width: 32, height: 32, borderRadius: 16,
+                      backgroundColor: d.active ? '#F97316' : (themeColors.card === '#fff' ? '#F1F5F9' : '#2A3A52'),
+                      alignItems: 'center', justifyContent: 'center',
+                      borderWidth: d.isToday ? 2 : 0, borderColor: '#F97316',
+                    }}>
+                      <Text style={[s.dayNum, { color: d.active ? '#fff' : themeColors.muted }]}>{d.num}</Text>
                     </View>
-                  );
-                })}
+                  </View>
+                ))}
               </View>
             </View>
           </View>
@@ -831,28 +838,29 @@ function GridItem({ title, sub, color, img, target }: any) {
   const { fontScale, colors: tc } = useLanguage();
   const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
   return (
-    <Pressable style={[s.gridItem, { backgroundColor: tc.card }]} onPress={() => router.push(target as any)}>
-      <View style={[s.gridTag, { backgroundColor: color }]}>
-        <Text style={s.gridTagText}>{title}</Text>
+    <Pressable
+      style={({ pressed }) => [s.gridItem, { backgroundColor: tc.card, opacity: pressed ? 0.85 : 1 }]}
+      onPress={() => router.push(target as any)}
+    >
+      <View style={[s.gridIconBg, { backgroundColor: color + '1F' }]}>
+        <Image source={img} style={s.gridIconImg} resizeMode="contain" />
       </View>
-      <View style={s.gridContent}>
-        <Image source={img} style={s.gridImg} resizeMode="contain" />
-        <Text style={s.gridSub}>{sub}</Text>
-      </View>
+      <Text style={[s.gridItemTitle, { color: tc.text }]} numberOfLines={2}>{title}</Text>
+      {sub ? <Text style={s.gridItemSub} numberOfLines={2}>{sub}</Text> : null}
     </Pressable>
   );
 }
 
-function ToolCard({ emoji, title, sub, color, target }: { emoji: string; title: string; sub: string; color: string; target: string }) {
+function ToolCard({ img, title, sub, color, target }: { img: any; title: string; sub: string; color: string; target: string }) {
   const router = useRouter();
   const { colors: tc } = useLanguage();
   return (
     <Pressable
-      style={[RAW_STYLES.toolCard, { backgroundColor: tc.card }]}
+      style={({ pressed }) => [RAW_STYLES.toolCard, { backgroundColor: tc.card, opacity: pressed ? 0.85 : 1 }]}
       onPress={() => router.push(target as any)}
     >
-      <View style={[RAW_STYLES.toolEmojiBg, { backgroundColor: color + '18' }]}>
-        <Text style={RAW_STYLES.toolEmoji}>{emoji}</Text>
+      <View style={[RAW_STYLES.toolEmojiBg, { backgroundColor: color + '1F' }]}>
+        <Image source={img} style={RAW_STYLES.toolImg} resizeMode="contain" />
       </View>
       <Text style={[RAW_STYLES.toolTitle, { color: tc.text }]}>{title}</Text>
       <Text style={RAW_STYLES.toolSub}>{sub}</Text>
@@ -864,7 +872,7 @@ const RAW_STYLES = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: C.bg },
   scrollSheet: {
     flex: 1,
-    marginTop: -28,
+    marginTop: -24,
     backgroundColor: C.bg,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -872,7 +880,7 @@ const RAW_STYLES = StyleSheet.create({
   },
   headerGradient: {
     paddingHorizontal: 20,
-    paddingBottom: 48,
+    paddingBottom: 36,
   },
   headerTop: {
     flexDirection: 'row',
@@ -1120,14 +1128,30 @@ const RAW_STYLES = StyleSheet.create({
   medTag: { marginTop: 12, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20, alignSelf: 'flex-start' },
   medTagText: { fontSize: 15, fontWeight: '700' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, paddingHorizontal: 20 },
+  gridItem: {
+    width: (width - 54) / 2,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 18,
+    alignItems: 'center',
+    gap: 10,
+    ...C.cardShadow,
+  },
+  gridIconBg: {
+    width: 56, height: 56, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  gridIconImg: { width: 36, height: 36 },
+  gridItemTitle: { fontSize: 14, fontWeight: '700', color: '#1F2937', textAlign: 'center' },
+  gridItemSub: { fontSize: 12, color: '#6B7280', fontWeight: '500', textAlign: 'center' },
   // Health Tools grid
   toolsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20 },
   toolCard: {
     width: (width - 54) / 2,
     borderRadius: 20,
-    padding: 16,
+    padding: 18,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     ...C.cardShadow,
   },
   toolEmojiBg: {
@@ -1135,26 +1159,9 @@ const RAW_STYLES = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   toolEmoji:  { fontSize: 28 },
-  toolTitle:  { fontSize: 14, fontWeight: '900', color: '#1A3050', textAlign: 'center' },
-  toolSub:    { fontSize: 11, color: '#8A94A6', fontWeight: '600', textAlign: 'center' },
-  gridItem: {
-    width: (width - 54) / 2,
-    height: 190,
-    backgroundColor: 'white',
-    borderRadius: 22,
-    overflow: 'hidden',
-    ...C.cardShadow,
-  },
-  gridTag: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderBottomRightRadius: 18,
-    alignSelf: 'flex-start',
-  },
-  gridTagText: { color: 'white', fontSize: 13, fontWeight: '800' },
-  gridContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: 14 },
-  gridImg: { width: 100, height: 100, marginBottom: 10 },
-  gridSub: { fontSize: 13, color: '#8A94A6', fontWeight: '600', minHeight: 16 },
+  toolImg:    { width: 36, height: 36 },
+  toolTitle:  { fontSize: 14, fontWeight: '700', color: '#1F2937', textAlign: 'center' },
+  toolSub:    { fontSize: 12, color: '#6B7280', fontWeight: '500', textAlign: 'center' },
   surpriseCard: {
     backgroundColor: 'white',
     borderRadius: 24,

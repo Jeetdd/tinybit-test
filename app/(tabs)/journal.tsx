@@ -49,42 +49,42 @@ type JournalT = {
 
 const JT: Partial<Record<Language, JournalT>> = {
   English: {
-    memoryJournal: "Memory Journal", yourLifeStory: "Your life story", memoriesShared: "Memories shared · Family loves reading these",
+    memoryJournal: "My Memories", yourLifeStory: "Your life story", memoriesShared: "Memories shared · Family loves reading these",
     dayStreak: "Day Streak! 🔥", todaysMemoryPrompt: "Today's Memory Prompt", todaysQuestion: "Today's Question for you",
     recordVoice: "Record Voice", writeIt: "Write It", justSpeak: "Just speak -\nSathi will save", typeYourMemory: "Type your memory -\nSathi will save it.",
     pastMemories: "Past Memories", viewAll: "View all", createMemory: "Create Memory", shareAsPdf: "Memories · Share as a PDF Gift",
     writeMemory: "Write Memory", tellYourStory: "Tell your story...", shareWithFamily: "Share with Family",
   },
   "हिंदी": {
-    memoryJournal: "यादों की डायरी", yourLifeStory: "आपकी जीवन कहानी", memoriesShared: "यादें साझा · परिवार पढ़ना पसंद करता है",
+    memoryJournal: "मेरी यादें", yourLifeStory: "आपकी जीवन कहानी", memoriesShared: "यादें साझा · परिवार पढ़ना पसंद करता है",
     dayStreak: "दिन की स्ट्रीक! 🔥", todaysMemoryPrompt: "आज का यादों का संकेत", todaysQuestion: "आज का आपके लिए सवाल",
     recordVoice: "आवाज़ रिकॉर्ड करें", writeIt: "लिखें", justSpeak: "बस बोलें -\nसाथी सहेज लेगा", typeYourMemory: "अपनी याद लिखें -\nसाथी सहेज लेगा।",
     pastMemories: "पुरानी यादें", viewAll: "सभी देखें", createMemory: "याद बनाएं", shareAsPdf: "यादें · PDF उपहार के रूप में साझा करें",
     writeMemory: "याद लिखें", tellYourStory: "अपनी कहानी बताएं...", shareWithFamily: "परिवार के साथ साझा करें",
   },
   "ગુજરાતી": {
-    memoryJournal: "યાદો ડાયરી", yourLifeStory: "તમારી જીવન કહાની", memoriesShared: "યાદો શૅર · પરિવારને વાંચવી ગમે છે",
+    memoryJournal: "મારી યાદો", yourLifeStory: "તમારી જીવન કહાની", memoriesShared: "યાદો શૅર · પરિવારને વાંચવી ગમે છે",
     dayStreak: "દિવસ સ્ટ્રીક! 🔥", todaysMemoryPrompt: "આજની યાદ સૂચના", todaysQuestion: "આજનો તમારા માટે સવાલ",
     recordVoice: "અવાજ રેકૉર્ડ કરો", writeIt: "લખો", justSpeak: "બસ બોલો -\nસાથી સાચવશે", typeYourMemory: "તમારી યાદ લખો -\nસાથી સાચવશે.",
     pastMemories: "જૂની યાદો", viewAll: "બધું જુઓ", createMemory: "યાદ બનાવો", shareAsPdf: "યાદો · PDF ભેટ તરીકે શૅર કરો",
     writeMemory: "યાદ લખો", tellYourStory: "તમારી વાર્તા કહો...", shareWithFamily: "પરિવાર સાથે શૅર કરો",
   },
   "தமிழ்": {
-    memoryJournal: "நினைவு நாட்குறிப்பு", yourLifeStory: "உங்கள் வாழ்க்கை கதை", memoriesShared: "நினைவுகள் பகிர்வு · குடும்பம் படிக்க விரும்புகிறது",
+    memoryJournal: "என் நினைவுகள்", yourLifeStory: "உங்கள் வாழ்க்கை கதை", memoriesShared: "நினைவுகள் பகிர்வு · குடும்பம் படிக்க விரும்புகிறது",
     dayStreak: "நாள் தொடர்! 🔥", todaysMemoryPrompt: "இன்றைய நினைவு தூண்டுதல்", todaysQuestion: "இன்றைய உங்களுக்கான கேள்வி",
     recordVoice: "குரல் பதிவு", writeIt: "எழுதுங்கள்", justSpeak: "பேசுங்கள் -\nசாதி சேமிக்கும்", typeYourMemory: "நினைவை தட்டச்சு செய்யுங்கள் -\nசாதி சேமிக்கும்.",
     pastMemories: "பழைய நினைவுகள்", viewAll: "அனைத்தும் காண்க", createMemory: "நினைவை உருவாக்கு", shareAsPdf: "நினைவுகள் · PDF பரிசாக பகிர்",
     writeMemory: "நினைவை எழுது", tellYourStory: "உங்கள் கதையை சொல்லுங்கள்...", shareWithFamily: "குடும்பத்துடன் பகிர்",
   },
   "বাংলা": {
-    memoryJournal: "স্মৃতি ডায়েরি", yourLifeStory: "আপনার জীবন কাহিনী", memoriesShared: "স্মৃতি শেয়ার · পরিবার পড়তে ভালোবাসে",
+    memoryJournal: "আমার স্মৃতি", yourLifeStory: "আপনার জীবন কাহিনী", memoriesShared: "স্মৃতি শেয়ার · পরিবার পড়তে ভালোবাসে",
     dayStreak: "দিনের ধারা! 🔥", todaysMemoryPrompt: "আজকের স্মৃতির ইঙ্গিত", todaysQuestion: "আজকের আপনার জন্য প্রশ্ন",
     recordVoice: "ভয়েস রেকর্ড", writeIt: "লিখুন", justSpeak: "শুধু বলুন -\nসাথি সংরক্ষণ করবে", typeYourMemory: "আপনার স্মৃতি টাইপ করুন -\nসাথি সংরক্ষণ করবে।",
     pastMemories: "পুরনো স্মৃতি", viewAll: "সব দেখুন", createMemory: "স্মৃতি তৈরি করুন", shareAsPdf: "স্মৃতি · PDF উপহার হিসেবে শেয়ার করুন",
     writeMemory: "স্মৃতি লিখুন", tellYourStory: "আপনার গল্প বলুন...", shareWithFamily: "পরিবারের সাথে শেয়ার করুন",
   },
   "मराठी": {
-    memoryJournal: "आठवणी डायरी", yourLifeStory: "तुमची जीवन कथा", memoriesShared: "आठवणी शेअर · कुटुंबाला वाचणे आवडते",
+    memoryJournal: "माझ्या आठवणी", yourLifeStory: "तुमची जीवन कथा", memoriesShared: "आठवणी शेअर · कुटुंबाला वाचणे आवडते",
     dayStreak: "दिवस स्ट्रीक! 🔥", todaysMemoryPrompt: "आजचे आठवणीचे संकेत", todaysQuestion: "आजचा तुमच्यासाठी प्रश्न",
     recordVoice: "आवाज रेकॉर्ड करा", writeIt: "लिहा", justSpeak: "फक्त बोला -\nसाथी सेव्ह करेल", typeYourMemory: "तुमची आठवण टाइप करा -\nसाथी सेव्ह करेल.",
     pastMemories: "जुन्या आठवणी", viewAll: "सर्व पाहा", createMemory: "आठवण तयार करा", shareAsPdf: "आठवणी · PDF भेट म्हणून शेअर करा",
@@ -103,27 +103,6 @@ const C = {
   cardBorder: '#EEF2F7',
 };
 
-type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
-function startOfWeek(date: Date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() - day);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function dateForWeekday(base: Date, weekday: DayOfWeek) {
-  const s = startOfWeek(base);
-  const d = new Date(s);
-  // Sunday (0) is the END of the Mon–Sun week, so it sits 7 days after the previous Sunday
-  d.setDate(s.getDate() + (weekday === 0 ? 7 : weekday));
-  return d;
-}
-
-function formatWeekdayLabel(weekday: DayOfWeek) {
-  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][weekday];
-}
 
 function MemoryCard({
   memory,
@@ -216,13 +195,12 @@ function MemoryCard({
 export default function JournalScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { streak, user } = useAuth();
+  const { user } = useAuth();
   const { language, fontScale, colors: themeColors } = useLanguage();
   const jt = (JT[language] ?? JT.English) as JournalT;
   const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
 
   const [memories, setMemories] = useState<any[]>([]);
-  const [journaledDates, setJournaledDates] = useState<Set<string>>(new Set());
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [isWriteModalVisible, setIsWriteModalVisible] = useState(false);
@@ -232,18 +210,6 @@ export default function JournalScreen() {
 
   const todaysPrompt = useMemo(() => getTodaysMemoryPrompt(), []);
 
-  const weekDays = useMemo(() => {
-    const base = new Date();
-    return [1, 2, 3, 4, 5, 6, 0].map((id) => {
-      const dayId = id as DayOfWeek;
-      const d = dateForWeekday(base, dayId);
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-      return {
-        id: dayId, label: formatWeekdayLabel(dayId), date: d.getDate(),
-        done: journaledDates.has(key),
-      };
-    });
-  }, [journaledDates]);
 
   useEffect(() => {
     if (user) loadMemories();
@@ -251,20 +217,11 @@ export default function JournalScreen() {
 
   const loadMemories = async () => {
     try {
-      const weekStart = startOfWeek(new Date()).toISOString();
       const { data, error } = await supabase
         .from('journal').select('*').eq('user_id', user?.id).order('created_at', { ascending: false });
       if (error && error.code !== 'PGRST205') throw error;
       const rows = data || [];
       setMemories(rows);
-      const datesThisWeek = new Set<string>();
-      rows.forEach((m) => {
-        const d = new Date(m.created_at);
-        if (d >= new Date(weekStart)) {
-          datesThisWeek.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
-        }
-      });
-      setJournaledDates(datesThisWeek);
     } catch (e) { console.error(e); }
   };
 
@@ -320,10 +277,11 @@ export default function JournalScreen() {
   };
 
   const generatePDF = async () => {
-    if (memories.length === 0) return Alert.alert("No Memories", "Record some memories first.");
+    const textMemories = memories.filter(m => m.type !== 'Voice');
+    if (textMemories.length === 0) return Alert.alert("No Memories", "Write some text memories first to create a PDF.");
     const html = `<html><body style="font-family:sans-serif;padding:40px;">
-      <h1 style="color:#2A79D8;text-align:center;">My Memory Journal</h1>
-      ${memories.map(m => `<div style="margin-bottom:30px;border-bottom:1px solid #eee;padding-bottom:10px;">
+      <h1 style="color:#4AA5D9;text-align:center;">My Memories</h1>
+      ${textMemories.map(m => `<div style="margin-bottom:30px;border-bottom:1px solid #eee;padding-bottom:10px;">
         <div style="font-weight:bold;color:#777;">${new Date(m.created_at).toLocaleDateString()}</div>
         <div style="font-size:18px;">${m.content}</div></div>`).join('')}
     </body></html>`;
@@ -351,15 +309,6 @@ export default function JournalScreen() {
             <Text style={[s.topCardSubtitle, { color: themeColors.text }]} allowFontScaling={false}>{jt.yourLifeStory}</Text>
             <Text style={s.topCardTitle} allowFontScaling={false}>{jt.memoryJournal}</Text>
             <Text style={[s.topCardDesc, { color: themeColors.muted }]} allowFontScaling={false}>{memories.length} {jt.memoriesShared}</Text>
-            <Text style={[s.streakTitle, { color: themeColors.text }]} allowFontScaling={false}>{streak} {jt.dayStreak}</Text>
-            <View style={s.streakDays}>
-              {weekDays.map((d) => (
-                <View key={d.id} style={s.streakDay}>
-                  <Text style={[s.streakDayLabel, d.id === 0 ? { color: '#E84545' } : { color: themeColors.muted }]} allowFontScaling={false}>{d.label}</Text>
-                  {d.done ? <Text style={s.streakDayIcon} allowFontScaling={false}>🔥</Text> : <Text style={[s.streakDayNumber, { color: themeColors.text }]} allowFontScaling={false}>{d.date}</Text>}
-                </View>
-              ))}
-            </View>
           </View>
 
           <View style={s.sectionHeaderRow}>
@@ -446,14 +395,10 @@ const RAW_STYLES = StyleSheet.create({
   headerTitle: { color: C.white, fontSize: 22, fontWeight: '800' },
   scrollSheet: { flex: 1, marginTop: -34, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
   topCard: { marginHorizontal: 1, padding: 20, borderRadius: 18, borderWidth: 1, elevation: 6 },
-  topCardSubtitle: { fontSize: 14, fontWeight: '800' }, topCardTitle: { fontSize: 28, fontWeight: '900', color: '#2A79D8', marginTop: 4 },
+  topCardSubtitle: { fontSize: 14, fontWeight: '800' }, topCardTitle: { fontSize: 28, fontWeight: '900', color: '#4AA5D9', marginTop: 4 },
   topCardDesc: { fontSize: 12, fontWeight: '600', marginTop: 6, marginBottom: 20 },
-  streakTitle: { fontSize: 18, fontWeight: '800' },
-  streakDays: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 },
-  streakDay: { alignItems: 'center', width: 36 }, streakDayLabel: { fontSize: 12, fontWeight: '700' },
-  streakDayIcon: { fontSize: 16, marginTop: 6 }, streakDayNumber: { marginTop: 6, fontSize: 14, fontWeight: '800' },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, marginTop: 24, marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: '800' }, sectionAction: { fontSize: 14, fontWeight: '700', color: '#2A79D8' },
+  sectionTitle: { fontSize: 18, fontWeight: '800' }, sectionAction: { fontSize: 14, fontWeight: '700', color: '#4AA5D9' },
   promptCard: { marginHorizontal: 16, borderRadius: 20, borderWidth: 1, overflow: 'hidden', elevation: 4 },
   promptTag: { backgroundColor: '#35C26B', paddingHorizontal: 16, paddingVertical: 6, alignSelf: 'flex-start', borderBottomRightRadius: 16 },
   promptTagText: { color: C.white, fontSize: 12, fontWeight: '800' },
@@ -474,7 +419,7 @@ const RAW_STYLES = StyleSheet.create({
   badgeWrittenText: { color: '#DE8542', fontSize: 10, fontWeight: '800' },
   memoryText: { fontSize: 16, fontWeight: '800' },
   bookCardRow: { flexDirection: 'row', alignItems: 'center' }, bookSubtitle: { fontSize: 14, fontWeight: '800' },
-  bookTitle: { fontSize: 24, fontWeight: '900', color: '#2A79D8', marginTop: 4, marginBottom: 6 }, bookDesc: { fontSize: 12, fontWeight: '600' },
+  bookTitle: { fontSize: 24, fontWeight: '900', color: '#4AA5D9', marginTop: 4, marginBottom: 6 }, bookDesc: { fontSize: 12, fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalContent: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, minHeight: 400 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 20 },

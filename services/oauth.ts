@@ -2,6 +2,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import * as Linking from 'expo-linking';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { Platform } from 'react-native';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabase';
 
@@ -12,42 +13,6 @@ export const GOOGLE_REDIRECT_URL = AuthSession.makeRedirectUri({
   path: 'auth-callback',
 });
 console.log('[OAuth] Redirect URL:', GOOGLE_REDIRECT_URL);
-
-// Opens the browser and returns the callback URL.
-// On iOS, ASWebAuthenticationSession intercepts the redirect directly.
-// On Android (Expo Go), the redirect arrives via Linking — we race both.
-function openBrowserAndWaitForCallback(oauthUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    let settled = false;
-
-    const finish = (url: string | null) => {
-      if (settled) return;
-      settled = true;
-      linkingSub.remove();
-      resolve(url);
-    };
-
-    // Android fallback: Linking fires when the deep link arrives
-    const linkingSub = Linking.addEventListener('url', ({ url }) => {
-      if (url.includes('code=') || url.includes('access_token=')) {
-        console.log('[OAuth] Linking callback received');
-        finish(url);
-      }
-    });
-
-    WebBrowser.openAuthSessionAsync(oauthUrl, GOOGLE_REDIRECT_URL)
-      .then((result) => {
-        console.log('[OAuth] openAuthSessionAsync result:', result.type);
-        if (result.type === 'success') {
-          finish(result.url);
-        } else if (!settled) {
-          // Non-success (cancel/dismiss): give Linking 1.5s to fire before giving up
-          setTimeout(() => finish(null), 1500);
-        }
-      })
-      .catch(() => finish(null));
-  });
-}
 
 export async function signInWithGoogle(): Promise<{ user: User } | null> {
   console.log('[OAuth] Starting Google sign-in...');
@@ -60,86 +25,70 @@ export async function signInWithGoogle(): Promise<{ user: User } | null> {
   if (!data.url) throw new Error('[OAuth] No URL returned from Supabase');
   console.log('[OAuth] Opening browser...');
 
-  const callbackUrl = await openBrowserAndWaitForCallback(data.url);
-  if (!callbackUrl) {
-    console.log('[OAuth] No callback URL — user cancelled or timed out');
-    return null;
+  // ── iOS ──────────────────────────────────────────────────────────────────
+  // ASWebAuthenticationSession intercepts the custom-scheme redirect and
+  // returns the full callback URL directly to us — no deep link involved.
+  if (Platform.OS === 'ios') {
+    const result = await WebBrowser.openAuthSessionAsync(data.url, GOOGLE_REDIRECT_URL);
+    console.log('[OAuth] iOS result type:', result.type);
+    if (result.type !== 'success') return null;
+
+    const qs   = (result.url.split('?')[1] ?? '').split('#')[0];
+    const code = new URLSearchParams(qs).get('code');
+    if (!code) throw new Error('[OAuth] No code in iOS callback URL');
+
+    console.log('[OAuth] Exchanging PKCE code (iOS)...');
+    const { data: ex, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+    if (exErr) throw exErr;
+    const user = ex?.user ?? ex?.session?.user ?? null;
+    console.log('[OAuth] iOS done. user:', user?.email ?? 'null');
+    return user ? { user } : null;
   }
 
-  console.log('[OAuth] Callback URL:', callbackUrl.substring(0, 200));
+  // ── Android ──────────────────────────────────────────────────────────────
+  // Chrome Custom Tabs cannot return the redirect URL to the caller.
+  // Instead the OS routes tinybittest://auth-callback?code=… as a deep link.
+  // Expo Router picks it up and navigates to app/auth-callback.tsx, which
+  // performs exchangeCodeForSession and the subsequent navigation.
+  //
+  // Here we only need to:
+  //   1. Open the browser.
+  //   2. Detect whether the user completed OAuth (Linking event fires) or
+  //      cancelled (browser closes with no Linking event).
+  //   3. Return null either way — auth-callback.tsx owns the rest.
+  const completed = await new Promise<boolean>((resolve) => {
+    let settled = false;
 
-  const hasPKCECode    = callbackUrl.includes('code=');
-  const hasAccessToken = callbackUrl.includes('access_token=');
-  const hasError       = callbackUrl.includes('error=');
-  console.log('[OAuth] hasPKCECode:', hasPKCECode, '| hasAccessToken:', hasAccessToken, '| hasError:', hasError);
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      linkingSub.remove();
+      resolve(ok);
+    };
 
-  if (hasError) {
-    const qs = callbackUrl.split('?')[1] ?? callbackUrl.split('#')[1] ?? '';
-    throw new Error(new URLSearchParams(qs).get('error_description') ?? 'OAuth error');
-  }
-
-  let sessionUser: User | null = null;
-
-  if (hasPKCECode) {
-    const qs = (callbackUrl.split('?')[1] ?? '').split('#')[0];
-    const code = new URLSearchParams(qs).get('code') ?? '';
-    console.log('[OAuth] Exchanging PKCE code...');
-
-    // On iOS without WebCrypto, exchangeCodeForSession fires SIGNED_IN but its
-    // Promise never resolves (Supabase SDK bug with plain PKCE challenge).
-    // Race the exchange promise against the SIGNED_IN auth-state event so
-    // whichever arrives first unblocks the flow.
-    sessionUser = await new Promise<User | null>((resolve, reject) => {
-      let settled = false;
-
-      const settle = (user: User | null, err?: Error) => {
-        if (settled) return;
-        settled = true;
-        authSub.unsubscribe();
-        if (err) reject(err);
-        else resolve(user);
-      };
-
-      // Register BEFORE starting the exchange — SIGNED_IN fires during the
-      // exchange and must not be missed.
-      const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
-        (event, session) => {
-          if (event === 'SIGNED_IN') {
-            console.log('[OAuth] SIGNED_IN received, user:', session?.user?.email ?? 'null');
-            settle(session?.user ?? null);
-          }
-        }
-      );
-
-      supabase.auth.exchangeCodeForSession(code)
-        .then(({ data: ex, error: exErr }) => {
-          console.log('[OAuth] Exchange result — user:', ex?.user?.email ?? 'null', '| error:', exErr?.message ?? 'none');
-          if (exErr) settle(null, exErr);
-          else settle(ex?.user ?? ex?.session?.user ?? null);
-        })
-        .catch((err) => settle(null, err));
+    // Linking fires with the callback URL before openAuthSessionAsync resolves.
+    const linkingSub = Linking.addEventListener('url', ({ url }) => {
+      if (url.includes('code=') || url.includes('access_token=') || url.includes('error=')) {
+        console.log('[OAuth] Android Linking callback received');
+        finish(true);
+      }
     });
 
-  } else if (hasAccessToken) {
-    const sep = callbackUrl.includes('#') ? '#' : '?';
-    const p = new URLSearchParams(callbackUrl.split(sep)[1] ?? '');
-    console.log('[OAuth] Setting implicit session...');
-    const { data: sd, error: sErr } = await supabase.auth.setSession({
-      access_token: p.get('access_token') ?? '',
-      refresh_token: p.get('refresh_token') ?? '',
-    });
-    console.log('[OAuth] setSession result — user:', sd?.user?.email ?? 'null', '| error:', sErr?.message ?? 'none');
-    if (sErr) throw sErr;
-    sessionUser = sd?.user ?? null;
+    WebBrowser.openAuthSessionAsync(data.url, GOOGLE_REDIRECT_URL)
+      .then(() => {
+        // Give Linking 1 s to fire before treating the session as cancelled.
+        setTimeout(() => finish(false), 1000);
+      })
+      .catch(() => finish(false));
+  });
 
-  } else {
-    throw new Error('Callback URL has neither code= nor access_token=');
-  }
+  console.log('[OAuth] Android completed:', completed);
+  if (!completed) return null; // user pressed back / dismissed browser
 
-  if (!sessionUser) return null;
-
-  console.log('[OAuth] Done. user:', sessionUser.email);
-  return { user: sessionUser };
+  // auth-callback.tsx is now processing the code. Return null so that
+  // navigateAfterSocialAuth in login.tsx short-circuits (getSession will
+  // return null at this instant since the exchange hasn't finished yet).
+  return null;
 }
 
 export async function signInWithApple(): Promise<{ user: User } | null> {

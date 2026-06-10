@@ -77,43 +77,25 @@ function RootLayoutNav() {
     segments,
   });
 
-  // Fallback OAuth deep-link handler.
-  // - Implicit flow (access_token=): handled for both warm and cold-start.
-  // - PKCE flow (code=): handled ONLY on cold-start (isInitialUrl=true).
-  //   When the app is warm, oauth.ts owns code exchange via its Linking listener.
-  //   When Android kills the app and restarts it from the OAuth redirect, oauth.ts
-  //   is not running, so we must exchange the code here instead.
+  // Fallback handler for implicit-flow OAuth redirects (access_token= fragment).
+  // PKCE code= redirects are handled entirely by app/auth-callback.tsx — do NOT
+  // call exchangeCodeForSession here or it will race with that screen and the
+  // second exchange fails with "code challenge does not match".
   useEffect(() => {
     let active = true;
 
-    const handleAuthUrl = async (url: string, isInitialUrl = false) => {
-      const hasAccessToken = url.includes('access_token=');
-      const hasPKCECode    = url.includes('code=');
-      if (!hasAccessToken && !hasPKCECode) return;
+    const handleAuthUrl = async (url: string) => {
+      if (!url.includes('access_token=')) return; // PKCE handled by auth-callback.tsx
       try {
-        let sessionUser = null;
+        const separator    = url.includes('#') ? '#' : '?';
+        const fragment     = url.split(separator)[1] ?? '';
+        const p            = new URLSearchParams(fragment);
+        const accessToken  = p.get('access_token');
+        const refreshToken = p.get('refresh_token') ?? '';
+        if (!accessToken) return;
 
-        if (hasPKCECode && isInitialUrl) {
-          const qs   = (url.split('?')[1] ?? '').split('#')[0];
-          const code = new URLSearchParams(qs).get('code') ?? '';
-          if (!code) return;
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error || !data?.session?.user) return;
-          sessionUser = data.session.user;
-        } else if (hasAccessToken) {
-          const separator   = url.includes('#') ? '#' : '?';
-          const fragment    = url.split(separator)[1] ?? '';
-          const p           = new URLSearchParams(fragment);
-          const accessToken = p.get('access_token');
-          const refreshToken = p.get('refresh_token') ?? '';
-          if (!accessToken) return;
-          const { data } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-          if (!data.session?.user) return;
-          sessionUser = data.session.user;
-        } else {
-          return; // PKCE code via warm Linking — oauth.ts handles it
-        }
-
+        const { data } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        const sessionUser  = data.session?.user;
         if (!sessionUser || !active) return;
 
         const { data: profileData } = await supabase
@@ -137,8 +119,8 @@ function RootLayoutNav() {
       }
     };
 
-    const sub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url, false));
-    Linking.getInitialURL().then(url => { if (active && url) handleAuthUrl(url, true); });
+    const sub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
+    Linking.getInitialURL().then(url => { if (active && url) handleAuthUrl(url); });
     return () => { active = false; sub.remove(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -220,6 +202,8 @@ function RootLayoutNav() {
         <Stack.Screen name="weather" options={{ headerShown: false }} />
         <Stack.Screen name="calorie-calculator" options={{ headerShown: false }} />
         <Stack.Screen name="help" options={{ headerShown: false }} />
+        {/* OAuth callback — handles the tinybittest://auth-callback deep link on Android */}
+        <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
       </Stack>
     </ThemeProvider>
   );

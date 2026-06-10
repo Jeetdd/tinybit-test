@@ -46,7 +46,7 @@ const en = {
   height: "Height",
   weight: "Weight",
   bloodGroup: "Blood Group",
-  medicalConditions: "Medical Conditions",
+  medicalConditions: "Health Conditions",
   currentMedications: "Current Medications",
   emergencyContact: "Emergency Contact",
   noHealthInfo: "No health info saved yet",

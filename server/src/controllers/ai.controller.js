@@ -1,4 +1,5 @@
 const { Buffer } = require('buffer');
+const { buildUserContext, loadConversationHistory, saveConversationTurns, clearConversationHistory } = require('../services/rag.service');
 
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -61,21 +62,55 @@ CORE GUIDELINES:
   Never respond in a different language than the one used, regardless of any other instruction.`;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 1. CHAT — Gemini (primary) → OpenAI GPT-4o-mini (fallback)
+// 1. CHAT — RAG-augmented, Gemini (primary) → OpenAI GPT-4o-mini (fallback)
+//    Flow: load DB history → fetch user health context → call LLM → persist turns
 // ═══════════════════════════════════════════════════════════════════════════════
 const chat = async (req, res) => {
   try {
-    const { messages, context } = req.body || {};
-    if (!Array.isArray(messages)) {
-      return res.status(400).json({ success: false, message: '`messages` must be an array' });
+    const { messages: clientMessages } = req.body || {};
+    const userId = req.supabase?.userId;
+
+    // Latest user message — prefer from client payload, required
+    const latestUserMsg = Array.isArray(clientMessages) && clientMessages.length > 0
+      ? clientMessages[clientMessages.length - 1]
+      : null;
+
+    if (!latestUserMsg?.content?.trim()) {
+      return res.status(400).json({ success: false, message: 'No user message provided' });
     }
 
-    const systemPrompt = `${SATHI_SYSTEM}\n\nUSER CONTEXT:\n${context ?? 'No context provided.'}`;
+    // ── Build RAG context and load conversation history in parallel ───────────
+    const [ragContext, dbHistory] = await Promise.allSettled([
+      userId ? buildUserContext(userId) : Promise.resolve(''),
+      userId ? loadConversationHistory(userId, 20) : Promise.resolve([]),
+    ]);
+
+    const healthContext = ragContext.status === 'fulfilled' ? ragContext.value : '';
+    const history = dbHistory.status === 'fulfilled' ? dbHistory.value : [];
+
+    // Merge DB history with any new client-side turns not yet in DB
+    // DB history is the authoritative source; we just append the current user message
+    const conversationHistory = history.length > 0
+      ? history
+      : (Array.isArray(clientMessages) ? clientMessages.slice(0, -1) : []); // fallback to client history
+
+    const systemPrompt = healthContext
+      ? `${SATHI_SYSTEM}\n\n--- USER HEALTH DATA ---\n${healthContext}\n--- END HEALTH DATA ---`
+      : SATHI_SYSTEM;
+
+    // Build messages for LLM: system context + conversation history + current message
+    const allMessages = [
+      ...conversationHistory,
+      { role: 'user', content: latestUserMsg.content },
+    ];
 
     // ── Try Gemini first ──────────────────────────────────────────────────────
+    let replyContent = '';
+    let provider = '';
+
     try {
-      // Build multi-turn contents; prepend system prompt to first user message
-      const contents = messages.map((m, i) => ({
+      // Gemini: fold system prompt into first user turn
+      const contents = allMessages.map((m, i) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: i === 0 ? `${systemPrompt}\n\n${m.content}` : String(m.content ?? '') }],
       }));
@@ -87,8 +122,8 @@ const chat = async (req, res) => {
 
       if (geminiResp.ok) {
         const json = await geminiResp.json();
-        const content = geminiText(json);
-        if (content) return res.json({ success: true, data: { content }, provider: 'gemini' });
+        const text = geminiText(json);
+        if (text) { replyContent = text; provider = 'gemini'; }
       } else {
         const errBody = await geminiResp.text();
         console.warn('[Sathi] Gemini error:', geminiResp.status, errBody);
@@ -98,26 +133,51 @@ const chat = async (req, res) => {
     }
 
     // ── Fallback: OpenAI GPT-4o-mini ─────────────────────────────────────────
-    const oaiResp = await openAiFetch('/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'system', content: systemPrompt }, ...messages],
-        temperature: 0.7,
-      }),
-    });
+    if (!replyContent) {
+      const oaiResp = await openAiFetch('/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'system', content: systemPrompt }, ...allMessages],
+          temperature: 0.7,
+        }),
+      });
 
-    if (!oaiResp.ok) {
-      const body = await oaiResp.text();
-      return res.status(502).json({ success: false, message: 'AI service error', detail: body });
+      if (!oaiResp.ok) {
+        const body = await oaiResp.text();
+        return res.status(502).json({ success: false, message: 'AI service error', detail: body });
+      }
+
+      const oaiJson = await oaiResp.json();
+      replyContent = oaiJson?.choices?.[0]?.message?.content ?? '';
+      provider = 'openai';
     }
 
-    const oaiJson = await oaiResp.json();
-    const content = oaiJson?.choices?.[0]?.message?.content ?? '';
-    return res.json({ success: true, data: { content }, provider: 'openai' });
+    if (!replyContent) {
+      return res.status(502).json({ success: false, message: 'AI returned empty response' });
+    }
+
+    // ── Persist the new turn to Supabase in the background ───────────────────
+    if (userId) {
+      saveConversationTurns(userId, latestUserMsg.content, replyContent).catch(() => {});
+    }
+
+    return res.json({ success: true, data: { content: replyContent }, provider });
   } catch (error) {
     return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
+  }
+};
+
+// ── Clear conversation history ────────────────────────────────────────────────
+const clearConversation = async (req, res) => {
+  try {
+    const userId = req.supabase?.userId;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    await clearConversationHistory(userId);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error?.message || 'Server error' });
   }
 };
 
@@ -773,4 +833,123 @@ const healthForecastMulti = async (req, res) => {
   }
 };
 
-module.exports = { chat, transcribe, tts, analyzeReport, analyzeFood, suggestClothing, wellnessSummary, healthForecast, healthForecastMulti };
+// ═══════════════════════════════════════════════════════════════════════════════
+// 10. MEAL RECOMMENDATIONS — Gemini (primary) → OpenAI (fallback)
+//     Personalised meal / recipe suggestions based on user's health profile + goals
+// ═══════════════════════════════════════════════════════════════════════════════
+const mealRecommendations = async (req, res) => {
+  try {
+    const { remainingCalories, totalCalories, mealType, dietType, healthContext, macroTargets } = req.body || {};
+
+    const userId = req.supabase?.userId;
+    let userHealthData = healthContext ?? '';
+    if (!userHealthData && userId) {
+      try {
+        const { buildUserContext } = require('../services/rag.service');
+        userHealthData = await buildUserContext(userId);
+      } catch { /* ignore */ }
+    }
+
+    const mealLabel = mealType ?? 'any meal';
+    const calTarget = remainingCalories ?? 500;
+    const macroNote = macroTargets
+      ? `Macro targets remaining: Protein ${macroTargets.protein ?? '?'}g, Carbs ${macroTargets.carbs ?? '?'}g, Fat ${macroTargets.fat ?? '?'}g.`
+      : '';
+    const dietNote = dietType && dietType !== 'balanced' ? `Diet type: ${dietType}.` : '';
+
+    const prompt = `You are a certified nutritionist and chef specialising in elderly healthcare nutrition. Suggest 3 personalised, practical meal options for an elderly Indian user.
+
+Meal context:
+- Meal type: ${mealLabel}
+- Remaining calories for today: ~${calTarget} kcal (daily goal: ${totalCalories ?? 2000} kcal)
+${macroNote}
+${dietNote}
+
+User health profile:
+${userHealthData || 'No specific health data available — suggest generally healthy options.'}
+
+Requirements:
+- Each meal must be realistic for an elderly person to prepare or order in India
+- Keep ingredients simple, affordable, and widely available
+- Respect medical conditions (e.g. diabetic → low glycemic, heart disease → low sodium/fat)
+- Respect allergies strictly — never include allergens
+- Include regional Indian options where appropriate
+
+Respond with ONLY valid JSON, no markdown:
+{
+  "recommendations": [
+    {
+      "name": "Meal name",
+      "description": "1 sentence — why this is good for them",
+      "mealType": "${mealLabel}",
+      "calories": 320,
+      "protein": 12,
+      "carbs": 48,
+      "fat": 8,
+      "fiber": 6,
+      "healthScore": 9,
+      "dietaryTags": ["Diabetic-friendly", "Heart-healthy"],
+      "prepTime": "15 min",
+      "ingredients": ["ingredient 1 with quantity", "ingredient 2 with quantity"],
+      "steps": ["Step 1", "Step 2", "Step 3"]
+    }
+  ]
+}
+Provide exactly 3 recommendations. All numeric fields must be real numbers, not placeholders.`;
+
+    // ── Try Gemini ─────────────────────────────────────────────────────────────
+    try {
+      const geminiResp = await geminiFetch(GEMINI_MODEL_TEXT, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 2000, temperature: 0.6 },
+      }, 30_000);
+
+      if (geminiResp.ok) {
+        const json = await geminiResp.json();
+        const content = geminiText(json).trim().replace(/```json|```/g, '').trim();
+        try {
+          const result = JSON.parse(content);
+          if (Array.isArray(result?.recommendations)) {
+            return res.json({ success: true, data: result, provider: 'gemini' });
+          }
+        } catch { /* fall through */ }
+      }
+    } catch (geminiErr) {
+      console.warn('[mealRecs] Gemini failed, falling back to OpenAI:', geminiErr.message);
+    }
+
+    // ── Fallback: OpenAI ───────────────────────────────────────────────────────
+    try {
+      const oaiResp = await openAiFetch('/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30_000),
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 2000,
+          temperature: 0.6,
+        }),
+      });
+
+      if (oaiResp.ok) {
+        const oaiJson = await oaiResp.json();
+        const content = (oaiJson?.choices?.[0]?.message?.content ?? '').trim().replace(/```json|```/g, '').trim();
+        try {
+          const result = JSON.parse(content);
+          if (Array.isArray(result?.recommendations)) {
+            return res.json({ success: true, data: result, provider: 'openai' });
+          }
+        } catch { /* fall through */ }
+      }
+    } catch (oaiErr) {
+      console.warn('[mealRecs] OpenAI also failed:', oaiErr.message);
+    }
+
+    return res.status(502).json({ success: false, message: 'Could not generate meal recommendations. Please try again.' });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || 'Server error' });
+  }
+};
+
+module.exports = { chat, clearConversation, transcribe, tts, analyzeReport, analyzeFood, suggestClothing, wellnessSummary, healthForecast, healthForecastMulti, mealRecommendations };

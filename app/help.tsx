@@ -53,10 +53,10 @@ const CATEGORIES: Category[] = [
     icon: "❤️",
     color: "#EF4444",
     tutorials: [
-      { id: "ht1", title: "Daily Check-In", description: "How to complete your daily mood and health check-in.", duration: "3:15", youtubeId: "dQw4w9WgXcQ", thumbnail: "📊", level: "Beginner" },
-      { id: "ht2", title: "Wellness Logs", description: "Track water intake, sleep, blood pressure, and more.", duration: "6:30", youtubeId: "dQw4w9WgXcQ", thumbnail: "💧", level: "Beginner" },
+      { id: "ht1", title: "Daily Wellness", description: "How to complete your daily mood and health check-in.", duration: "3:15", youtubeId: "dQw4w9WgXcQ", thumbnail: "📊", level: "Beginner" },
+      { id: "ht2", title: "Health Tracking", description: "Track water intake, sleep, blood pressure, and more.", duration: "6:30", youtubeId: "dQw4w9WgXcQ", thumbnail: "💧", level: "Beginner" },
       { id: "ht3", title: "Understanding Your Health Report", description: "Read and understand your health trends and charts.", duration: "5:45", youtubeId: "dQw4w9WgXcQ", thumbnail: "📈", level: "Intermediate" },
-      { id: "ht4", title: "Calorie Calculator", description: "Use AI to scan food and track your nutrition.", duration: "4:00", youtubeId: "dQw4w9WgXcQ", thumbnail: "🥗", level: "Intermediate" },
+      { id: "ht4", title: "Calorie Tracker", description: "Use AI to scan food and track your nutrition.", duration: "4:00", youtubeId: "dQw4w9WgXcQ", thumbnail: "🥗", level: "Intermediate" },
     ],
   },
   {
@@ -67,12 +67,12 @@ const CATEGORIES: Category[] = [
     tutorials: [
       { id: "med1", title: "Adding Medicines", description: "Add your daily medicines with dosage and timing.", duration: "4:20", youtubeId: "dQw4w9WgXcQ", thumbnail: "💊", level: "Beginner" },
       { id: "med2", title: "Medicine Reminders", description: "Set up reminders so you never miss a dose.", duration: "3:00", youtubeId: "dQw4w9WgXcQ", thumbnail: "⏰", level: "Beginner" },
-      { id: "med3", title: "Tracking Medicine Adherence", description: "Mark medicines as taken and view your adherence.", duration: "3:30", youtubeId: "dQw4w9WgXcQ", thumbnail: "✅", level: "Beginner" },
+      { id: "med3", title: "Medicine Progress", description: "Mark medicines as taken and view your adherence.", duration: "3:30", youtubeId: "dQw4w9WgXcQ", thumbnail: "✅", level: "Beginner" },
     ],
   },
   {
     id: "ai-sathi",
-    title: "Sathi AI Assistant",
+    title: "Talking with Sathi",
     icon: "🤖",
     color: "#8B5CF6",
     tutorials: [
@@ -88,7 +88,7 @@ const CATEGORIES: Category[] = [
     color: "#EF4444",
     tutorials: [
       { id: "em1", title: "Using the SOS Button", description: "How to use the emergency SOS feature safely.", duration: "2:30", youtubeId: "dQw4w9WgXcQ", thumbnail: "🆘", level: "Beginner" },
-      { id: "em2", title: "Health QR Card", description: "Generate and share your Emergency Health QR card.", duration: "3:00", youtubeId: "dQw4w9WgXcQ", thumbnail: "🏥", level: "Beginner" },
+      { id: "em2", title: "Health ID Card", description: "Generate and share your Emergency Health QR card.", duration: "3:00", youtubeId: "dQw4w9WgXcQ", thumbnail: "🏥", level: "Beginner" },
       { id: "em3", title: "Location Sharing", description: "Share your live location with family for safety.", duration: "3:20", youtubeId: "dQw4w9WgXcQ", thumbnail: "📍", level: "Beginner" },
     ],
   },
@@ -98,9 +98,9 @@ const CATEGORIES: Category[] = [
     icon: "👨‍👩‍👧‍👦",
     color: "#F59E0B",
     tutorials: [
-      { id: "fam1", title: "Guardian Dashboard", description: "How guardians can monitor an elder's health.", duration: "6:00", youtubeId: "dQw4w9WgXcQ", thumbnail: "🛡️", level: "Intermediate" },
+      { id: "fam1", title: "Family Dashboard", description: "How guardians can monitor an elder's health.", duration: "6:00", youtubeId: "dQw4w9WgXcQ", thumbnail: "🛡️", level: "Intermediate" },
       { id: "fam2", title: "Family Messages", description: "Send and receive voice messages from family.", duration: "3:30", youtubeId: "dQw4w9WgXcQ", thumbnail: "💌", level: "Beginner" },
-      { id: "fam3", title: "Care Calendar", description: "Schedule and manage care events with family.", duration: "4:00", youtubeId: "dQw4w9WgXcQ", thumbnail: "📅", level: "Intermediate" },
+      { id: "fam3", title: "My Calendar", description: "Schedule and manage care events with family.", duration: "4:00", youtubeId: "dQw4w9WgXcQ", thumbnail: "📅", level: "Intermediate" },
     ],
   },
 ];
@@ -170,7 +170,7 @@ export default function HelpScreen() {
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </Pressable>
         <View style={s.headerCenter}>
-          <Text style={s.headerTitle}>Help & Tutorials</Text>
+          <Text style={s.headerTitle}>Help & Guide</Text>
           <Text style={s.headerSub}>{allTutorialCount} video tutorials available</Text>
         </View>
         <View style={{ width: 40 }} />

@@ -31,14 +31,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { API_BASE_URL } from '../../config/api';
 import { notifyGuardiansOf } from '../../services/notifications';
 import type { NotifType } from '../../services/notifications';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type ModalType =
-  | 'medicine' | 'mood' | 'water' | 'bp_sugar' | 'pain'
-  | 'sleep' | 'checkin' | 'voice' | 'activity' | 'meal' | 'doctor'
+  | 'medicine' | 'water' | 'bp_sugar' | 'pain'
+  | 'sleep' | 'voice' | 'activity' | 'meal' | 'doctor'
   | null;
 
 interface HealthLog {
@@ -57,15 +58,6 @@ interface Medicine {
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const MOODS = [
-  { emoji: '😀', label: 'Happy',   value: 'happy',   color: '#10B981' },
-  { emoji: '😊', label: 'Good',    value: 'good',    color: '#3B82F6' },
-  { emoji: '😐', label: 'Normal',  value: 'normal',  color: '#F59E0B' },
-  { emoji: '😔', label: 'Sad',     value: 'sad',     color: '#8B5CF6' },
-  { emoji: '😰', label: 'Anxious', value: 'anxious', color: '#F97316' },
-  { emoji: '😴', label: 'Tired',   value: 'tired',   color: '#64748B' },
-];
-
 const SYMPTOMS = [
   { icon: '🌀', label: 'Dizziness',       value: 'dizziness',       emergency: true  },
   { icon: '💔', label: 'Chest Pain',       value: 'chest_pain',      emergency: true  },
@@ -232,11 +224,11 @@ export default function HealthLogScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const { user, profile } = useAuth();
+  const { colors: themeColors } = useLanguage();
 
   // ── UI state
   const [activeModal,  setActiveModal]  = useState<ModalType>(null);
   const [saving,       setSaving]       = useState(false);
-  const [showFollowUp, setShowFollowUp] = useState(false);
 
   // ── Data
   const [todayLogs,    setTodayLogs]    = useState<HealthLog[]>([]);
@@ -261,9 +253,6 @@ export default function HealthLogScreen() {
   const [sleepQuality, setSleepQuality] = useState<string | null>(null);
   const [sleepHours,   setSleepHours]   = useState(7);
 
-  // ── Mood / Check-in
-  const [selectedMood,   setSelectedMood]   = useState<string | null>(null);
-  const [checkinStatus,  setCheckinStatus]  = useState<string | null>(null);
 
   // ── Voice
   const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -432,76 +421,58 @@ export default function HealthLogScreen() {
 
   // ── Reset form on open ───────────────────────────────────────────────────────
   const openModal = (id: ModalType) => {
-    setSelectedMood(null); setSleepQuality(null); setCheckinStatus(null);
+    setSleepQuality(null);
     setPainLevel(0); setSelectedSymptoms([]); setBpQuick(null); setSugarQuick(null);
     setSystolic(''); setDiastolic(''); setSugarValue('');
     setVoiceTranscript(''); setVoiceParsed(null);
     setDoctorName(''); setDoctorNotes('');
-    setShowFollowUp(false);
     setActiveModal(id);
   };
 
   // ── Derived stats ────────────────────────────────────────────────────────────
-  const todayMood    = todayLogs.find(l => l.type === 'mood');
   const todaySleep   = todayLogs.find(l => l.type === 'sleep');
-  const todayCheckin = todayLogs.find(l => l.type === 'checkin');
   const medTaken     = medicineLogs.filter(l => l.value?.status === 'taken').length;
   const medSkipped   = medicineLogs.filter(l => l.value?.status === 'skipped').length;
 
   const MAIN_CARDS = [
     {
       id: 'medicine' as ModalType,
-      emoji: '💊', title: 'Medicine Log',
+      icon: 'medkit', title: 'Medicine Log',
       subtitle: medicineLogs.length ? `${medTaken} taken · ${medSkipped} skipped` : 'Log your medicines',
       gradient: ['#1E3A5F', '#2B7FC0'] as [string, string],
       done: medTaken > 0,
     },
     {
-      id: 'mood' as ModalType,
-      emoji: todayMood ? (MOODS.find(m => m.value === todayMood.value?.mood)?.emoji ?? '😊') : '😊',
-      title: 'Mood',
-      subtitle: todayMood ? `Feeling ${todayMood.value?.mood}` : 'How do you feel?',
-      gradient: ['#5B21B6', '#7C3AED'] as [string, string],
-      done: !!todayMood,
-    },
-    {
       id: 'water' as ModalType,
-      emoji: '💧', title: 'Water Intake',
+      icon: 'water', title: 'Water Intake',
       subtitle: `${waterCount} / ${WATER_GOAL} glasses`,
       gradient: ['#0369A1', '#0EA5E9'] as [string, string],
       done: waterCount >= WATER_GOAL,
     },
     {
       id: 'bp_sugar' as ModalType,
-      emoji: '❤️', title: 'BP & Sugar',
+      icon: 'pulse', title: 'Blood Pressure & Sugar',
       subtitle: todayLogs.some(l => l.type === 'bp' || l.type === 'sugar') ? 'Logged today ✓' : 'Log vitals',
       gradient: ['#9F1239', '#E11D48'] as [string, string],
       done: todayLogs.some(l => l.type === 'bp' || l.type === 'sugar'),
     },
     {
       id: 'pain' as ModalType,
-      emoji: '😣', title: 'Pain & Symptoms',
+      icon: 'alert-circle', title: 'Pain & Symptoms',
       subtitle: todayLogs.some(l => l.type === 'symptom') ? 'Symptoms saved' : 'Any pain today?',
       gradient: ['#C2410C', '#EA580C'] as [string, string],
       done: todayLogs.some(l => l.type === 'symptom'),
     },
     {
       id: 'sleep' as ModalType,
-      emoji: '😴', title: 'Sleep Log',
+      icon: 'moon', title: 'Sleep Log',
       subtitle: todaySleep ? `${todaySleep.value?.quality} · ${todaySleep.value?.hours}h` : 'How did you sleep?',
       gradient: ['#1E1B4B', '#4338CA'] as [string, string],
       done: !!todaySleep,
     },
     {
-      id: 'checkin' as ModalType,
-      emoji: '🌟', title: 'Daily Check-In',
-      subtitle: todayCheckin ? `Status: ${todayCheckin.value?.status}` : "Today's status",
-      gradient: ['#14532D', '#16A34A'] as [string, string],
-      done: !!todayCheckin,
-    },
-    {
       id: 'voice' as ModalType,
-      emoji: '🎤', title: 'Voice Log',
+      icon: 'mic', title: 'Voice Log',
       subtitle: 'Speak to log health',
       gradient: ['#92400E', '#D97706'] as [string, string],
       done: todayLogs.some(l => l.type === 'voice_note'),
@@ -509,9 +480,9 @@ export default function HealthLogScreen() {
   ];
 
   const MORE_CARDS = [
-    { id: 'activity' as ModalType, emoji: '🚶', title: 'Activity',      color: '#10B981' },
-    { id: 'meal'     as ModalType, emoji: '🍽️', title: 'Meals',         color: '#F59E0B' },
-    { id: 'doctor'   as ModalType, emoji: '👨‍⚕️', title: 'Doctor Visit', color: '#3B82F6' },
+    { id: 'activity' as ModalType, icon: 'walk',       title: 'Activity',      color: '#10B981' },
+    { id: 'meal'     as ModalType, icon: 'restaurant',  title: 'Meals',         color: '#F59E0B' },
+    { id: 'doctor'   as ModalType, icon: 'medical',     title: 'Doctor Visit',  color: '#3B82F6' },
   ];
 
   const completedCount = MAIN_CARDS.filter(c => c.done).length;
@@ -521,7 +492,7 @@ export default function HealthLogScreen() {
   // ════════════════════════════════════════════════════════════════════════════
   const renderMedicineModal = () => (
     <Modal visible={activeModal === 'medicine'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
+      <View style={[m.sheet, { backgroundColor: themeColors.card }]}>
         <View style={m.handle} />
         <View style={m.head}>
           <Text style={m.headTitle}>💊 Medicine Log</Text>
@@ -576,50 +547,11 @@ export default function HealthLogScreen() {
   );
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MODAL: Mood
-  // ════════════════════════════════════════════════════════════════════════════
-  const renderMoodModal = () => (
-    <Modal visible={activeModal === 'mood'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
-        <View style={m.handle} />
-        <View style={m.head}>
-          <Text style={m.headTitle}>😊 How Are You Feeling?</Text>
-          <Pressable onPress={() => setActiveModal(null)}><Ionicons name="close" size={28} color="#64748B" /></Pressable>
-        </View>
-        <View style={m.body}>
-          <View style={m.moodGrid}>
-            {MOODS.map(mood => (
-              <Pressable key={mood.value}
-                style={[m.moodBtn, selectedMood === mood.value && { borderColor: mood.color, borderWidth: 3, backgroundColor: mood.color + '22' }]}
-                onPress={() => setSelectedMood(mood.value)}
-              >
-                <Text style={m.moodEmoji}>{mood.emoji}</Text>
-                <Text style={m.moodLabel}>{mood.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <Pressable
-            style={[m.saveBtn, (!selectedMood || saving) && m.saveBtnOff]}
-            disabled={!selectedMood || saving}
-            onPress={async () => {
-              if (!selectedMood) return;
-              const ok = await saveLog('mood', { mood: selectedMood });
-              if (ok) { Alert.alert('✅ Mood saved!'); setActiveModal(null); }
-            }}
-          >
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={m.saveBtnTxt}>Save Mood</Text>}
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  // ════════════════════════════════════════════════════════════════════════════
   // MODAL: Water
   // ════════════════════════════════════════════════════════════════════════════
   const renderWaterModal = () => (
     <Modal visible={activeModal === 'water'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
+      <View style={[m.sheet, { backgroundColor: themeColors.card }]}>
         <View style={m.handle} />
         <View style={m.head}>
           <Text style={m.headTitle}>💧 Water Intake</Text>
@@ -665,7 +597,7 @@ export default function HealthLogScreen() {
   // ════════════════════════════════════════════════════════════════════════════
   const renderBPSugarModal = () => (
     <Modal visible={activeModal === 'bp_sugar'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
+      <View style={[m.sheet, { backgroundColor: themeColors.card }]}>
         <View style={m.handle} />
         <View style={m.head}>
           <Text style={m.headTitle}>❤️ BP & Blood Sugar</Text>
@@ -767,7 +699,7 @@ export default function HealthLogScreen() {
     const hasEmergency = selectedSymptoms.some(sv => SYMPTOMS.find(s => s.value === sv)?.emergency);
     return (
       <Modal visible={activeModal === 'pain'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-        <View style={m.sheet}>
+        <View style={[m.sheet, { backgroundColor: themeColors.card }]}>
           <View style={m.handle} />
           <View style={m.head}>
             <Text style={m.headTitle}>😣 Pain & Symptoms</Text>
@@ -832,7 +764,7 @@ export default function HealthLogScreen() {
   // ════════════════════════════════════════════════════════════════════════════
   const renderSleepModal = () => (
     <Modal visible={activeModal === 'sleep'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
+      <View style={[m.sheet, { backgroundColor: themeColors.card }]}>
         <View style={m.handle} />
         <View style={m.head}>
           <Text style={m.headTitle}>😴 Sleep Log</Text>
@@ -876,61 +808,6 @@ export default function HealthLogScreen() {
   );
 
   // ════════════════════════════════════════════════════════════════════════════
-  // MODAL: Daily Check-In
-  // ════════════════════════════════════════════════════════════════════════════
-  const renderCheckinModal = () => (
-    <Modal visible={activeModal === 'checkin'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
-        <View style={m.handle} />
-        <View style={m.head}>
-          <Text style={m.headTitle}>🌟 Daily Check-In</Text>
-          <Pressable onPress={() => setActiveModal(null)}><Ionicons name="close" size={28} color="#64748B" /></Pressable>
-        </View>
-        <View style={m.body}>
-          <Text style={m.checkinQ}>How are you today?</Text>
-          <View style={m.checkinRow}>
-            {[
-              { label: 'Good',     emoji: '😊', value: 'good',     color: '#10B981' },
-              { label: 'Okay',     emoji: '😐', value: 'okay',     color: '#F59E0B' },
-              { label: 'Not Well', emoji: '😔', value: 'not_well', color: '#EF4444' },
-            ].map(opt => (
-              <Pressable key={opt.value}
-                style={[m.checkinBtn, checkinStatus === opt.value && { borderColor: opt.color, borderWidth: 3, backgroundColor: opt.color + '22' }]}
-                onPress={async () => {
-                  setCheckinStatus(opt.value);
-                  if (opt.value === 'not_well') { setShowFollowUp(true); return; }
-                  const ok = await saveLog('checkin', { status: opt.value });
-                  if (ok) { Alert.alert(`${opt.emoji} Logged! Take care.`); setActiveModal(null); }
-                }}
-              >
-                <Text style={m.checkinEmoji}>{opt.emoji}</Text>
-                <Text style={m.checkinTxt}>{opt.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {showFollowUp && (
-            <View style={m.followBox}>
-              <Text style={m.followQ}>What's bothering you?</Text>
-              <View style={m.followChips}>
-                {['Headache', 'Fever', 'Tiredness', 'Body Pain', 'Chest Pain', 'Nausea', 'Other'].map(s => (
-                  <Pressable key={s} style={m.followChip} onPress={async () => {
-                    const ok = await saveLog('checkin', { status: 'not_well', complaint: s });
-                    if (s === 'Chest Pain') notifyGuardian(`⚠️ ${profile?.firstName ?? 'Elder'} is not well: ${s}`);
-                    if (ok) { Alert.alert('😔 Noted. Please rest and stay safe.'); setActiveModal(null); setShowFollowUp(false); }
-                  }}>
-                    <Text style={m.followChipTxt}>{s}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-
-  // ════════════════════════════════════════════════════════════════════════════
   // MODAL: Voice Log
   // ════════════════════════════════════════════════════════════════════════════
   const renderVoiceModal = () => (
@@ -940,7 +817,7 @@ export default function HealthLogScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
       >
-        <View style={m.sheet}>
+        <View style={[m.sheet, { backgroundColor: themeColors.card }]}>
           <View style={m.handle} />
           <View style={m.head}>
             <Text style={m.headTitle}>🎤 Voice Log</Text>
@@ -1005,7 +882,7 @@ export default function HealthLogScreen() {
   // ════════════════════════════════════════════════════════════════════════════
   const renderActivityModal = () => (
     <Modal visible={activeModal === 'activity'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
+      <View style={[m.sheet, { backgroundColor: themeColors.card }]}>
         <View style={m.handle} />
         <View style={m.head}>
           <Text style={m.headTitle}>🚶 Activity Log</Text>
@@ -1041,7 +918,7 @@ export default function HealthLogScreen() {
   // ════════════════════════════════════════════════════════════════════════════
   const renderMealModal = () => (
     <Modal visible={activeModal === 'meal'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
+      <View style={[m.sheet, { backgroundColor: themeColors.card }]}>
         <View style={m.handle} />
         <View style={m.head}>
           <Text style={m.headTitle}>🍽️ Meal Log</Text>
@@ -1084,7 +961,7 @@ export default function HealthLogScreen() {
   // ════════════════════════════════════════════════════════════════════════════
   const renderDoctorModal = () => (
     <Modal visible={activeModal === 'doctor'} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setActiveModal(null)}>
-      <View style={m.sheet}>
+      <View style={[m.sheet, { backgroundColor: themeColors.card }]}>
         <View style={m.handle} />
         <View style={m.head}>
           <Text style={m.headTitle}>👨‍⚕️ Doctor Visit</Text>
@@ -1148,7 +1025,7 @@ export default function HealthLogScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.body, { paddingBottom: insets.bottom + 90 }]}>
 
         {/* ── Main 8 cards ── */}
-        <Text style={s.secTitle}>Quick Log</Text>
+        <Text style={[s.secTitle, { color: themeColors.text }]}>Quick Log</Text>
         <View style={s.grid}>
           {MAIN_CARDS.map(card => (
             <Pressable key={card.id} style={s.card} onPress={() => openModal(card.id)}>
@@ -1158,7 +1035,9 @@ export default function HealthLogScreen() {
                     <Ionicons name="checkmark-circle" size={20} color="#fff" />
                   </View>
                 )}
-                <Text style={s.cardEmoji}>{card.emoji}</Text>
+                <View style={s.cardIconWrap}>
+                  <Ionicons name={card.icon as any} size={26} color="rgba(255,255,255,0.95)" />
+                </View>
                 <Text style={s.cardTitle}>{card.title}</Text>
                 <Text style={s.cardSub} numberOfLines={1}>{card.subtitle}</Text>
               </LinearGradient>
@@ -1167,13 +1046,15 @@ export default function HealthLogScreen() {
         </View>
 
         {/* ── More logs ── */}
-        <Text style={s.secTitle}>More Logs</Text>
+        <Text style={[s.secTitle, { color: themeColors.text }]}>More Logs</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.moreRow}>
           {MORE_CARDS.map(card => (
-            <Pressable key={card.id} style={[s.moreCard, { borderLeftColor: card.color }]} onPress={() => openModal(card.id)}>
-              <Text style={s.moreEmoji}>{card.emoji}</Text>
-              <Text style={s.moreTxt}>{card.title}</Text>
-              <Ionicons name="chevron-forward" size={16} color="#94A3B8" style={{ marginTop: 4 }} />
+            <Pressable key={card.id} style={[s.moreCard, { borderLeftColor: card.color, backgroundColor: themeColors.card }]} onPress={() => openModal(card.id)}>
+              <View style={[s.moreIconWrap, { backgroundColor: card.color + '18' }]}>
+                <Ionicons name={card.icon as any} size={24} color={card.color} />
+              </View>
+              <Text style={[s.moreTxt, { color: themeColors.text }]}>{card.title}</Text>
+              <Ionicons name="chevron-forward" size={16} color={themeColors.muted} style={{ marginTop: 4 }} />
             </Pressable>
           ))}
         </ScrollView>
@@ -1181,8 +1062,8 @@ export default function HealthLogScreen() {
         {/* ── Today's Timeline ── */}
         {todayLogs.length > 0 && (
           <>
-            <Text style={s.secTitle}>Today's Timeline</Text>
-            <View style={s.timeline}>
+            <Text style={[s.secTitle, { color: themeColors.text }]}>Today's Timeline</Text>
+            <View style={[s.timeline, { backgroundColor: themeColors.card }]}>
               {todayLogs.slice(0, 12).map((log, i) => (
                 <View key={log.id} style={s.tlItem}>
                   <View style={s.tlLeft}>
@@ -1214,8 +1095,10 @@ export default function HealthLogScreen() {
         {/* Empty state */}
         {todayLogs.length === 0 && (
           <View style={s.emptyState}>
-            <Text style={s.emptyEmoji}>🌅</Text>
-            <Text style={s.emptyTitle}>No logs yet today</Text>
+            <View style={s.emptyIconWrap}>
+              <Ionicons name="clipboard-outline" size={36} color="#4AA5D9" />
+            </View>
+            <Text style={[s.emptyTitle, { color: themeColors.text }]}>No logs yet today</Text>
             <Text style={s.emptySub}>Tap any card above to start tracking your health</Text>
           </View>
         )}
@@ -1224,12 +1107,10 @@ export default function HealthLogScreen() {
 
       {/* ── All Modals ── */}
       {renderMedicineModal()}
-      {renderMoodModal()}
       {renderWaterModal()}
       {renderBPSugarModal()}
       {renderPainModal()}
       {renderSleepModal()}
-      {renderCheckinModal()}
       {renderVoiceModal()}
       {renderActivityModal()}
       {renderMealModal()}
@@ -1254,22 +1135,22 @@ const s = StyleSheet.create({
   progTxt:  { fontSize: 12, color: 'rgba(255,255,255,0.85)', fontWeight: '700', textAlign: 'right' },
 
   body:    { paddingHorizontal: 14, paddingTop: 18 },
-  secTitle: { fontSize: 18, fontWeight: '900', color: '#1E293B', marginBottom: 12, marginTop: 4 },
+  secTitle: { fontSize: 18, fontWeight: '900', marginBottom: 12, marginTop: 4 },
 
   grid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
   card:    { width: '47%', borderRadius: 20, overflow: 'hidden', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6 },
-  cardGrad:  { padding: 16, minHeight: 110, justifyContent: 'flex-end', position: 'relative' },
+  cardGrad:  { padding: 16, minHeight: 118, justifyContent: 'flex-end', position: 'relative' },
   doneCheck: { position: 'absolute', top: 10, right: 10 },
-  cardEmoji: { fontSize: 32, marginBottom: 6 },
+  cardIconWrap: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   cardTitle: { fontSize: 15, fontWeight: '900', color: '#fff' },
   cardSub:   { fontSize: 11, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginTop: 2 },
 
   moreRow:  { paddingRight: 14, gap: 10, paddingBottom: 24 },
-  moreCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, minWidth: 130, alignItems: 'center', borderLeftWidth: 4, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 },
-  moreEmoji: { fontSize: 30, marginBottom: 6 },
-  moreTxt:   { fontSize: 13, fontWeight: '800', color: '#1E293B' },
+  moreCard: { borderRadius: 16, padding: 16, minWidth: 130, alignItems: 'center', borderLeftWidth: 4, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 },
+  moreIconWrap: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  moreTxt:   { fontSize: 13, fontWeight: '800' },
 
-  timeline:  { backgroundColor: '#fff', borderRadius: 20, padding: 16, marginBottom: 24, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+  timeline:  { borderRadius: 20, padding: 16, marginBottom: 24, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
   tlItem:    { flexDirection: 'row', marginBottom: 4 },
   tlLeft:    { alignItems: 'center', marginRight: 12, width: 16 },
   tlDot:     { width: 12, height: 12, borderRadius: 6, backgroundColor: '#2B7FC0', marginTop: 4 },
@@ -1281,10 +1162,10 @@ const s = StyleSheet.create({
   tlTime:    { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
   tlDetail:  { fontSize: 13, color: '#64748B', fontWeight: '600', marginTop: 2 },
 
-  emptyState: { alignItems: 'center', paddingVertical: 40, gap: 10 },
-  emptyEmoji: { fontSize: 52 },
-  emptyTitle: { fontSize: 18, fontWeight: '900', color: '#1E293B' },
-  emptySub:   { fontSize: 14, color: '#94A3B8', fontWeight: '600', textAlign: 'center' },
+  emptyState:   { alignItems: 'center', paddingVertical: 40, gap: 10 },
+  emptyIconWrap:{ width: 72, height: 72, borderRadius: 20, backgroundColor: '#E8F3FF', alignItems: 'center', justifyContent: 'center' },
+  emptyTitle:   { fontSize: 18, fontWeight: '900' },
+  emptySub:     { fontSize: 14, color: '#94A3B8', fontWeight: '600', textAlign: 'center' },
 });
 
 // ── Modal styles ───────────────────────────────────────────────────────────────

@@ -876,7 +876,7 @@ export default function HealthVaultScreen() {
           <Ionicons name="chevron-back" size={20} color={C.white} />
         </Pressable>
         <View>
-          <Text style={s.headerTitle}>Health Vault</Text>
+          <Text style={s.headerTitle}>Health Records</Text>
           {isGuardianView && elderName ? (
             <Text style={s.headerSub}>{elderName}</Text>
           ) : null}

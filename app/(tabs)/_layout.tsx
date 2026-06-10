@@ -16,8 +16,8 @@ export default function TabLayout() {
       {/* ── Visible tabs ── */}
       <Tabs.Screen name="index"   options={{ title: 'Home' }} />
       <Tabs.Screen name="medicine" options={{ title: 'Medicine' }} />
-      <Tabs.Screen name="ai"      options={{ title: 'Sathi AI' }} />
-      <Tabs.Screen name="journal" options={{ title: 'Journal' }} />
+      <Tabs.Screen name="ai"      options={{ title: 'Sathi' }} />
+      <Tabs.Screen name="journal" options={{ title: 'Memories' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
 
       {/* ── Guardian screens (hidden from tab bar) ── */}
@@ -28,7 +28,7 @@ export default function TabLayout() {
       <Tabs.Screen name="caregivers"       options={{ href: null, title: 'Caregivers' }} />
       <Tabs.Screen name="add-parent"       options={{ href: null, title: 'Add Parent' }} />
       <Tabs.Screen name="parent-medicines" options={{ href: null, title: 'Parent Medicines' }} />
-      <Tabs.Screen name="guardian-calendar" options={{ href: null, title: 'Care Calendar' }} />
+      <Tabs.Screen name="guardian-calendar" options={{ href: null, title: 'My Calendar' }} />
       <Tabs.Screen name="guardian-summary"  options={{ href: null, title: 'Daily Summary' }} />
       <Tabs.Screen name="doctors"          options={{ href: null, title: 'Doctors' }} />
 

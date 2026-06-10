@@ -341,8 +341,8 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
 export default function MedicineScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, profile, streak } = useAuth();
-  const { language, fontScale, colors: themeColors } = useLanguage();
+  const { user, profile } = useAuth();
+  const { language, fontScale, colors: themeColors, nightMode } = useLanguage();
   const mt = (MT[language] ?? MT.English) as MedScreenT;
   const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
 
@@ -661,10 +661,15 @@ export default function MedicineScreen() {
                 <Pressable
                   key={d.id}
                   onPress={() => setSelectedDay(d.id)}
-                  style={[s.dayPill, active ? s.dayPillActive : s.dayPillInactive]}
+                  style={[
+                    s.dayPill,
+                    active
+                      ? s.dayPillActive
+                      : [s.dayPillInactive, { backgroundColor: nightMode ? '#2A3A52' : '#1E1F24' }],
+                  ]}
                 >
-                  <Text style={[s.dayLabel, active && s.dayLabelActive]}>{d.label}</Text>
-                  <Text style={s.dayDate}>{d.date}</Text>
+                  <Text style={[s.dayLabel, active && s.dayLabelActive, !active && { color: nightMode ? '#A0AFBF' : '#898D9E' }]}>{d.label}</Text>
+                  <Text style={[s.dayDate, { color: '#FFFFFF' }]}>{d.date}</Text>
                   {!active && dayDone[d.id] ? <View style={s.dayDot} /> : null}
                 </Pressable>
               );
@@ -731,29 +736,6 @@ export default function MedicineScreen() {
             </View>
           )}
 
-          {/* Streak card */}
-          <View style={[s.block, { marginBottom: 12 }]}>
-            <Text style={[s.blockTitle, { color: themeColors.text }]}>{mt.yourStreak}</Text>
-            <View style={s.streakWrapper}>
-              <View style={s.streakIconWrap}>
-                <Ionicons name="flame" size={32} color={streak > 0 ? "#FF8C42" : "#C8D0DC"} />
-              </View>
-              <View style={[s.streakCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
-                <Text style={[s.streakTitle, { color: themeColors.text }]}>{streak} {mt.dayStreak}</Text>
-                <Text style={[s.streakSub, { color: themeColors.muted }]}>{mt.onTheRightTrack}</Text>
-                <View style={s.streakDays}>
-                  {weekDays.map((d) => (
-                    <View key={d.id} style={s.streakDay}>
-                      <Text style={[s.streakDayLabel, { color: themeColors.muted }, d.id === 0 && { color: '#E84545' }]}>{d.label}</Text>
-                      {dayDone[d.id]
-                        ? <Ionicons name="flame" size={18} color="#FF8C42" style={{ marginTop: 4 }} />
-                        : <Text style={[s.streakDayNumber, { color: themeColors.text }]}>{d.date}</Text>}
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </View>
-          </View>
         </ScrollView>
       </View>
 

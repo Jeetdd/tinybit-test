@@ -38,15 +38,15 @@ const SECTIONS: { title: string; items: MenuItem[] }[] = [
     title: "Health",
     items: [
       { label: "Medicine",       icon: "medkit-outline",            route: "/(tabs)/medicine",       color: "#F59E0B", bg: "#FFF8E7" },
-      { label: "Daily Check-In", icon: "checkmark-circle-outline",  route: "/(tabs)/daily-check-in", color: "#16A34A", bg: "#F0FFF4" },
-      { label: "Health Vault",   icon: "shield-checkmark-outline",  route: "/(tabs)/health-vault",   color: "#37B1E6", bg: "#EFF8FF" },
+      { label: "Daily Wellness", icon: "checkmark-circle-outline",  route: "/(tabs)/daily-check-in", color: "#16A34A", bg: "#F0FFF4" },
+      { label: "Health Records", icon: "shield-checkmark-outline",  route: "/(tabs)/health-vault",   color: "#37B1E6", bg: "#EFF8FF" },
     ],
   },
   {
     title: "Activities",
     items: [
-      { label: "Sathi AI",   icon: "chatbubble-ellipses-outline", route: "/(tabs)/ai",       color: "#7C3AED", bg: "#F5F0FF" },
-      { label: "Mind Games", icon: "game-controller-outline",     route: "/(tabs)/mind-games",color: "#EC4899", bg: "#FFF0F8" },
+      { label: "Sathi",       icon: "chatbubble-ellipses-outline", route: "/(tabs)/ai",       color: "#7C3AED", bg: "#F5F0FF" },
+      { label: "Brain Games", icon: "game-controller-outline",     route: "/(tabs)/mind-games",color: "#EC4899", bg: "#FFF0F8" },
       { label: "Mood Lift",  icon: "sunny-outline",               route: "/mood-lift",        color: "#F59E0B", bg: "#FFF8E7" },
     ],
   },
@@ -54,7 +54,7 @@ const SECTIONS: { title: string; items: MenuItem[] }[] = [
     title: "Connect",
     items: [
       { label: "Family Messages", icon: "people-outline",    route: "/(tabs)/family-messages", color: "#16A34A", bg: "#F0FFF4" },
-      { label: "Care Calendar",   icon: "calendar-outline",  route: "/(tabs)/care-calendar",   color: "#37B1E6", bg: "#EFF8FF" },
+      { label: "My Calendar",      icon: "calendar-outline",  route: "/(tabs)/care-calendar",   color: "#37B1E6", bg: "#EFF8FF" },
     ],
   },
   {

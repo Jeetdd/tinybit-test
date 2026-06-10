@@ -9,12 +9,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Alert,
   Keyboard, Pressable,
   RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TextInput,
-  View
+  TouchableOpacity, View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_BASE_URL } from "../config/api";
@@ -71,6 +71,14 @@ interface ClothingSuggestion {
   emoji: string;
 }
 
+interface GeoSuggestion {
+  name: string;
+  state?: string;
+  country: string;
+  lat: number;
+  lon: number;
+}
+
 // ── Weather condition → visual mapping ────────────────────────────────────────
 function getWeatherEmoji(code: number): string {
   if (code >= 200 && code < 300) return "⛈️";
@@ -121,6 +129,9 @@ export default function WeatherScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<GeoSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { loadByLocation(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -144,10 +155,52 @@ export default function WeatherScreen() {
     }
   };
 
-  // ── Search by city name ───────────────────────────────────────────────────
+  // ── Fetch geo suggestions as user types ──────────────────────────────────
+  const fetchSuggestions = async (query: string) => {
+    if (!query.trim() || !OWM_API_KEY || OWM_API_KEY.length < 10) {
+      setSuggestions([]); setShowSuggestions(false); return;
+    }
+    try {
+      const res = await fetch(
+        `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query.trim())}&limit=5&appid=${OWM_API_KEY}`
+      );
+      const data: GeoSuggestion[] = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setSuggestions(data);
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]); setShowSuggestions(false);
+      }
+    } catch {
+      setSuggestions([]); setShowSuggestions(false);
+    }
+  };
+
+  const handleSearchChange = (text: string) => {
+    setSearchQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (text.trim().length >= 2) {
+      debounceRef.current = setTimeout(() => fetchSuggestions(text), 350);
+    } else {
+      setSuggestions([]); setShowSuggestions(false);
+    }
+  };
+
+  const handleSelectSuggestion = async (s: GeoSuggestion) => {
+    Keyboard.dismiss();
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setSearchQuery('');
+    setSearching(true);
+    await fetchWeather(s.lat, s.lon);
+    setSearching(false);
+  };
+
+  // ── Search by city name (submit) ──────────────────────────────────────────
   const searchCity = async () => {
     if (!searchQuery.trim()) return;
     Keyboard.dismiss();
+    setShowSuggestions(false);
     setSearching(true);
     setError(null);
     try {
@@ -329,26 +382,55 @@ export default function WeatherScreen() {
             </Pressable>
           </View>
 
-          {/* Search bar */}
-          <View style={s.searchWrap}>
-            <Ionicons name="search-outline" size={18} color="rgba(255,255,255,0.7)" />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Search city..."
-              placeholderTextColor="rgba(255,255,255,0.6)"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={searchCity}
-              returnKeyType="search"
-            />
-            {searching
-              ? <ActivityIndicator color="#fff" size="small" />
-              : (
-                <Pressable onPress={searchCity}>
-                  <Ionicons name="arrow-forward-circle" size={24} color="rgba(255,255,255,0.9)" />
-                </Pressable>
-              )
-            }
+          {/* Search bar + suggestions */}
+          <View style={s.searchContainer}>
+            <View style={s.searchWrap}>
+              <Ionicons name="search-outline" size={18} color="rgba(255,255,255,0.7)" />
+              <TextInput
+                style={s.searchInput}
+                placeholder="Search city, state or country..."
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                value={searchQuery}
+                onChangeText={handleSearchChange}
+                onSubmitEditing={searchCity}
+                returnKeyType="search"
+              />
+              {searching
+                ? <ActivityIndicator color="#fff" size="small" />
+                : searchQuery.length > 0
+                ? (
+                  <Pressable onPress={() => { setSearchQuery(''); setSuggestions([]); setShowSuggestions(false); }}>
+                    <Ionicons name="close-circle" size={20} color="rgba(255,255,255,0.7)" />
+                  </Pressable>
+                )
+                : (
+                  <Pressable onPress={searchCity}>
+                    <Ionicons name="arrow-forward-circle" size={24} color="rgba(255,255,255,0.9)" />
+                  </Pressable>
+                )
+              }
+            </View>
+
+            {/* Autocomplete dropdown */}
+            {showSuggestions && suggestions.length > 0 && (
+              <View style={s.suggestionsBox}>
+                {suggestions.map((item, idx) => (
+                  <TouchableOpacity
+                    key={`${item.lat}-${item.lon}`}
+                    style={[s.suggestionItem, idx < suggestions.length - 1 && s.suggestionBorder]}
+                    onPress={() => handleSelectSuggestion(item)}
+                  >
+                    <Ionicons name="location-outline" size={16} color="#4AA5D9" style={{ marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.suggestionCity}>{item.name}</Text>
+                      <Text style={s.suggestionSub}>
+                        {[item.state, item.country].filter(Boolean).join(', ')}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Current conditions */}
@@ -543,8 +625,21 @@ const s = StyleSheet.create({
   heroNavTitle: { fontSize: 22, fontWeight: "900", color: "#fff" },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
 
-  searchWrap: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, gap: 10, marginBottom: 24 },
+  searchContainer: { marginBottom: 24, position: "relative", zIndex: 100 },
+  searchWrap: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10, gap: 10 },
   searchInput: { flex: 1, fontSize: 15, fontWeight: "600", color: "#fff" },
+
+  suggestionsBox: {
+    position: "absolute", top: "100%", left: 0, right: 0,
+    backgroundColor: "#fff", borderRadius: 14, marginTop: 6,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, shadowRadius: 10, elevation: 10,
+    overflow: "hidden", zIndex: 200,
+  },
+  suggestionItem: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 13 },
+  suggestionBorder: { borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  suggestionCity: { fontSize: 14, fontWeight: "800", color: "#1E293B" },
+  suggestionSub: { fontSize: 12, color: "#94A3B8", fontWeight: "500", marginTop: 1 },
 
   loadingHero: { alignItems: "center", paddingVertical: 48, gap: 12 },
   loadingText: { color: "rgba(255,255,255,0.8)", fontSize: 15, fontWeight: "600" },
