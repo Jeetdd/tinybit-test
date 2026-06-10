@@ -13,7 +13,7 @@ import {
   Headphones, Ticket, MessageCircle, ArrowUpRight,
   Cpu, Activity, Medal,
   Clock, Mail, Shield,
-  UserCog,
+  UserCog, ShieldCheck, Key, ClipboardList,
 } from 'lucide-react';
 import { cn } from '../ui';
 import { useAuth } from '../../contexts/AuthContext';
@@ -35,6 +35,17 @@ const NAV_ITEMS: NavItem[] = [
     path: '/dashboard',
   },
   {
+    id: 'admin-management',
+    label: 'Admin Management',
+    icon: <ShieldCheck className="w-4 h-4" />,
+    children: [
+      { id: 'admin-accounts', label: 'Admin Accounts', icon: <UserCog className="w-4 h-4" />, path: '/admin-management/accounts' },
+      { id: 'role-management', label: 'Role Management', icon: <Shield className="w-4 h-4" />, path: '/admin-management/roles' },
+      { id: 'permissions', label: 'Permissions', icon: <Key className="w-4 h-4" />, path: '/admin-management/permissions' },
+      { id: 'activity-logs', label: 'Activity Logs', icon: <ClipboardList className="w-4 h-4" />, path: '/admin-management/logs' },
+    ],
+  },
+  {
     id: 'users',
     label: 'User Management',
     icon: <Users className="w-4 h-4" />,
@@ -43,7 +54,6 @@ const NAV_ITEMS: NavItem[] = [
       { id: 'guardians', label: 'Guardians', icon: <UserCheck className="w-4 h-4" />, path: '/users/guardians' },
       { id: 'family-circle', label: 'Family Circle', icon: <Users className="w-4 h-4" />, path: '/users/family-circle' },
       { id: 'invitations', label: 'Pending Invitations', icon: <Inbox className="w-4 h-4" />, path: '/users/invitations', badge: { text: '12', variant: 'warning' } },
-      { id: 'roles', label: 'Role Management', icon: <UserCog className="w-4 h-4" />, path: '/users/roles' },
     ],
   },
   {
