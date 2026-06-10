@@ -177,15 +177,14 @@ export interface DashboardStats {
   activeElders: number;
   totalGuardians: number;
   activeGuardians: number;
-  connectedFamilyMembers: number;
   dailyActiveUsers: number;
   monthlyActiveUsers: number;
   sosTriggeredToday: number;
-  medicinesTakenToday: number;
-  missedMedicines: number;
-  dailyCheckIns: number;
   activeAIUsers: number;
-  totalJournalEntries: number;
+  activeSubscriptions: number;
+  monthlyRevenue: number;
+  openSupportTickets: number;
+  totalAIRequestsToday: number;
 }
 
 export interface ChartData {

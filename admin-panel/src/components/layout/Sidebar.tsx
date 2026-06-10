@@ -3,13 +3,18 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, UserCheck, Heart, Pill, Activity, FileText,
-  AlertTriangle, Phone, ShieldAlert, Bot, MessageSquare, BookOpen,
-  Calendar, MapPin, Video, Bell, BarChart3, Settings, LogOut,
-  ChevronDown, ChevronRight, ChevronLeft, UserPlus, Inbox,
-  Stethoscope, ClipboardList, TrendingUp, Trophy, Award,
-  Zap, Map, Film, HelpCircle, Wind, Gift, Key, ScrollText,
-  Layers, DollarSign, Users2,
+  LayoutDashboard, Users, UserCheck, FileText,
+  AlertTriangle, Phone, ShieldAlert, Bot, MessageSquare,
+  Video, Bell, BarChart3, Settings, LogOut,
+  ChevronDown, ChevronRight, ChevronLeft, Inbox,
+  TrendingUp, Trophy,
+  Zap, Film, HelpCircle, ScrollText,
+  DollarSign, Users2,
+  CreditCard, Package, Wallet,
+  Headphones, Ticket, MessageCircle, ArrowUpRight,
+  Cpu, Activity, Medal,
+  Clock, Mail, Shield,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '../ui';
 import { useAuth } from '../../contexts/AuthContext';
@@ -24,93 +29,106 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" />, path: '/dashboard' },
   {
-    id: 'users', label: 'User Management', icon: <Users className="w-4 h-4" />,
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: <LayoutDashboard className="w-4 h-4" />,
+    path: '/dashboard',
+  },
+  {
+    id: 'users',
+    label: 'User Management',
+    icon: <Users className="w-4 h-4" />,
     children: [
       { id: 'elders', label: 'Elders', icon: <Users2 className="w-4 h-4" />, path: '/users/elders' },
       { id: 'guardians', label: 'Guardians', icon: <UserCheck className="w-4 h-4" />, path: '/users/guardians' },
       { id: 'family-circle', label: 'Family Circle', icon: <Users className="w-4 h-4" />, path: '/users/family-circle' },
       { id: 'invitations', label: 'Pending Invitations', icon: <Inbox className="w-4 h-4" />, path: '/users/invitations', badge: { text: '12', variant: 'warning' } },
+      { id: 'roles', label: 'Role Management', icon: <UserCog className="w-4 h-4" />, path: '/users/roles' },
     ],
   },
   {
-    id: 'health', label: 'Health Management', icon: <Heart className="w-4 h-4" />,
+    id: 'subscriptions',
+    label: 'Subscription & Payments',
+    icon: <CreditCard className="w-4 h-4" />,
     children: [
-      { id: 'medicines', label: 'Medicine Management', icon: <Pill className="w-4 h-4" />, path: '/health/medicines' },
-      { id: 'wellness', label: 'Wellness Logs', icon: <Activity className="w-4 h-4" />, path: '/health/wellness' },
-      { id: 'checkins', label: 'Daily Check-ins', icon: <ClipboardList className="w-4 h-4" />, path: '/health/checkins' },
-      { id: 'vault', label: 'Health Vault', icon: <FileText className="w-4 h-4" />, path: '/health/vault' },
-      { id: 'conditions', label: 'Medical Conditions', icon: <Stethoscope className="w-4 h-4" />, path: '/health/conditions' },
+      { id: 'plans', label: 'Subscription Plans', icon: <Package className="w-4 h-4" />, path: '/subscriptions/plans' },
+      { id: 'user-subscriptions', label: 'User Subscriptions', icon: <Users className="w-4 h-4" />, path: '/subscriptions/user-subscriptions' },
+      { id: 'payments', label: 'Payments', icon: <Wallet className="w-4 h-4" />, path: '/subscriptions/payments' },
+      { id: 'revenue', label: 'Revenue Reports', icon: <BarChart3 className="w-4 h-4" />, path: '/subscriptions/revenue' },
     ],
   },
   {
-    id: 'emergency', label: 'Emergency Management', icon: <AlertTriangle className="w-4 h-4" />,
+    id: 'content',
+    label: 'Content Management',
+    icon: <Video className="w-4 h-4" />,
     children: [
-      { id: 'sos', label: 'SOS Alerts', icon: <ShieldAlert className="w-4 h-4" />, path: '/emergency/sos', badge: { text: '7', variant: 'danger' } },
+      { id: 'videos', label: 'Video Management', icon: <Film className="w-4 h-4" />, path: '/content/videos' },
+      { id: 'faqs', label: 'FAQ Management', icon: <HelpCircle className="w-4 h-4" />, path: '/content/faqs' },
+    ],
+  },
+  {
+    id: 'support',
+    label: 'Support Management',
+    icon: <Headphones className="w-4 h-4" />,
+    children: [
+      { id: 'tickets', label: 'Support Tickets', icon: <Ticket className="w-4 h-4" />, path: '/support/tickets', badge: { text: '23', variant: 'warning' } },
+      { id: 'queries', label: 'User Queries', icon: <MessageSquare className="w-4 h-4" />, path: '/support/queries' },
+      { id: 'chat-support', label: 'Chat Support', icon: <MessageCircle className="w-4 h-4" />, path: '/support/chat' },
+      { id: 'escalation', label: 'Escalation Management', icon: <ArrowUpRight className="w-4 h-4" />, path: '/support/escalation' },
+    ],
+  },
+  {
+    id: 'ai',
+    label: 'AI Management',
+    icon: <Bot className="w-4 h-4" />,
+    children: [
+      { id: 'ai-usage', label: 'AI Usage Dashboard', icon: <Activity className="w-4 h-4" />, path: '/ai/usage' },
+      { id: 'ai-analytics', label: 'Token Analytics', icon: <TrendingUp className="w-4 h-4" />, path: '/ai/analytics' },
+      { id: 'ai-models', label: 'AI Models', icon: <Cpu className="w-4 h-4" />, path: '/ai/models' },
+      { id: 'ai-costs', label: 'Cost Tracking', icon: <DollarSign className="w-4 h-4" />, path: '/ai/costs' },
+    ],
+  },
+  {
+    id: 'emergency',
+    label: 'SOS Management',
+    icon: <ShieldAlert className="w-4 h-4" />,
+    children: [
+      { id: 'sos', label: 'SOS Alerts', icon: <AlertTriangle className="w-4 h-4" />, path: '/emergency/sos', badge: { text: '7', variant: 'danger' } },
       { id: 'emergency-contacts', label: 'Emergency Contacts', icon: <Phone className="w-4 h-4" />, path: '/emergency/contacts' },
       { id: 'incidents', label: 'Incident Reports', icon: <FileText className="w-4 h-4" />, path: '/emergency/incidents' },
     ],
   },
   {
-    id: 'ai', label: 'AI Management', icon: <Bot className="w-4 h-4" />,
+    id: 'notifications',
+    label: 'Notifications & Email',
+    icon: <Bell className="w-4 h-4" />,
     children: [
-      { id: 'ai-usage', label: 'AI Chat Usage', icon: <MessageSquare className="w-4 h-4" />, path: '/ai/usage' },
-      { id: 'ai-analytics', label: 'Token Analytics', icon: <TrendingUp className="w-4 h-4" />, path: '/ai/analytics' },
-      { id: 'ai-conversations', label: 'Conversations', icon: <Layers className="w-4 h-4" />, path: '/ai/conversations' },
-      { id: 'prompt-templates', label: 'Prompt Templates', icon: <FileText className="w-4 h-4" />, path: '/ai/prompts' },
-      { id: 'ai-costs', label: 'AI Cost Tracking', icon: <DollarSign className="w-4 h-4" />, path: '/ai/costs' },
+      { id: 'push-notifications', label: 'Push Notifications', icon: <Bell className="w-4 h-4" />, path: '/notifications/push' },
+      { id: 'scheduled', label: 'Scheduled', icon: <Clock className="w-4 h-4" />, path: '/notifications/scheduled' },
+      { id: 'email-management', label: 'Email Management', icon: <Mail className="w-4 h-4" />, path: '/notifications/email' },
+      { id: 'delivery-logs', label: 'Delivery Logs', icon: <ScrollText className="w-4 h-4" />, path: '/notifications/logs' },
     ],
   },
   {
-    id: 'journal', label: 'Journal Management', icon: <BookOpen className="w-4 h-4" />,
+    id: 'rewards',
+    label: 'Leaderboard & Rewards',
+    icon: <Trophy className="w-4 h-4" />,
     children: [
-      { id: 'voice-journals', label: 'Voice Journals', icon: <Zap className="w-4 h-4" />, path: '/journal/voice' },
-      { id: 'text-journals', label: 'Text Journals', icon: <FileText className="w-4 h-4" />, path: '/journal/text' },
-      { id: 'shared-journals', label: 'Shared Journals', icon: <Users className="w-4 h-4" />, path: '/journal/shared' },
+      { id: 'leaderboard', label: 'Leaderboard', icon: <Medal className="w-4 h-4" />, path: '/rewards/leaderboard' },
+      { id: 'streaks', label: 'Streak Management', icon: <Zap className="w-4 h-4" />, path: '/rewards/streaks' },
     ],
   },
   {
-    id: 'care', label: 'Care Management', icon: <Calendar className="w-4 h-4" />,
-    children: [
-      { id: 'care-calendar', label: 'Care Calendar', icon: <Calendar className="w-4 h-4" />, path: '/care/calendar' },
-      { id: 'appointments', label: 'Appointments', icon: <UserPlus className="w-4 h-4" />, path: '/care/appointments' },
-      { id: 'family-events', label: 'Family Events', icon: <Gift className="w-4 h-4" />, path: '/care/family-events' },
-      { id: 'doctors', label: 'Doctor Records', icon: <Stethoscope className="w-4 h-4" />, path: '/care/doctors' },
-    ],
-  },
-  {
-    id: 'location', label: 'Location Tracking', icon: <MapPin className="w-4 h-4" />,
-    children: [
-      { id: 'live-location', label: 'Live Locations', icon: <Map className="w-4 h-4" />, path: '/location/live' },
-      { id: 'movement-history', label: 'Movement History', icon: <Activity className="w-4 h-4" />, path: '/location/history' },
-      { id: 'geofencing', label: 'Geofencing', icon: <MapPin className="w-4 h-4" />, path: '/location/geofencing' },
-    ],
-  },
-  {
-    id: 'content', label: 'Content Management', icon: <Video className="w-4 h-4" />,
-    children: [
-      { id: 'videos', label: 'Videos', icon: <Film className="w-4 h-4" />, path: '/content/videos' },
-      { id: 'tutorials', label: 'Tutorials', icon: <HelpCircle className="w-4 h-4" />, path: '/content/tutorials' },
-      { id: 'breathing', label: 'Breathing Programs', icon: <Wind className="w-4 h-4" />, path: '/content/breathing' },
-    ],
-  },
-  { id: 'reports', label: 'Reports & Analytics', icon: <BarChart3 className="w-4 h-4" />, path: '/reports' },
-  { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" />, path: '/notifications' },
-  {
-    id: 'rewards', label: 'Rewards & Gamification', icon: <Trophy className="w-4 h-4" />,
-    children: [
-      { id: 'streaks', label: 'Streaks', icon: <Zap className="w-4 h-4" />, path: '/rewards/streaks' },
-      { id: 'badges', label: 'Badges', icon: <Award className="w-4 h-4" />, path: '/rewards/badges' },
-      { id: 'achievements', label: 'Achievements', icon: <Trophy className="w-4 h-4" />, path: '/rewards/achievements' },
-    ],
-  },
-  {
-    id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />,
+    id: 'settings',
+    label: 'Settings',
+    icon: <Settings className="w-4 h-4" />,
     children: [
       { id: 'general-settings', label: 'General Settings', icon: <Settings className="w-4 h-4" />, path: '/settings/general' },
-      { id: 'api-keys', label: 'API Keys', icon: <Key className="w-4 h-4" />, path: '/settings/api-keys' },
-      { id: 'audit-logs', label: 'Audit Logs', icon: <ScrollText className="w-4 h-4" />, path: '/settings/audit-logs' },
+      { id: 'payment-gateway', label: 'Payment Gateway', icon: <CreditCard className="w-4 h-4" />, path: '/settings/payment' },
+      { id: 'notification-settings', label: 'Notification Settings', icon: <Bell className="w-4 h-4" />, path: '/settings/notifications' },
+      { id: 'ai-settings', label: 'AI Settings', icon: <Bot className="w-4 h-4" />, path: '/settings/ai' },
+      { id: 'role-permissions', label: 'Role Permissions', icon: <Shield className="w-4 h-4" />, path: '/settings/roles' },
     ],
   },
 ];
@@ -268,7 +286,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {!collapsed && user && (
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors mb-1">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-teal-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-              {user.name.split(' ').map(n => n[0]).join('')}
+              {user.name.split(' ').map((n: string) => n[0]).join('')}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{user.name}</p>

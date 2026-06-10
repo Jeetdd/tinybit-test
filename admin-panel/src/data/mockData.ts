@@ -9,15 +9,14 @@ export const dashboardStats: DashboardStats = {
   activeElders: 2341,
   totalGuardians: 3156,
   activeGuardians: 2891,
-  connectedFamilyMembers: 8432,
   dailyActiveUsers: 1456,
   monthlyActiveUsers: 2234,
   sosTriggeredToday: 7,
-  medicinesTakenToday: 1823,
-  missedMedicines: 234,
-  dailyCheckIns: 1654,
   activeAIUsers: 892,
-  totalJournalEntries: 45672,
+  activeSubscriptions: 1842,
+  monthlyRevenue: 184200,
+  openSupportTickets: 23,
+  totalAIRequestsToday: 4380,
 };
 
 export const currentAdmin: AdminUser = {
