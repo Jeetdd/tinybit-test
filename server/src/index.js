@@ -1,3 +1,8 @@
+// Node.js < 22 has no native WebSocket — polyfill before Supabase loads
+if (!globalThis.WebSocket) {
+  globalThis.WebSocket = require('ws');
+}
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
