@@ -11,7 +11,6 @@ import { setupGlobalErrorHandlers } from '../utils/logger';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { LanguageProvider, useLanguage } from '../context/LanguageContext';
 import { useEffect } from 'react';
-import AppSplashScreen from '../components/AppSplashScreen';
 import { supabase } from '../utils/supabase';
 import { deriveNamesFromUser } from '../utils/profileName';
 import { registerPushToken } from '../services/pushNotifications';
@@ -179,7 +178,7 @@ function RootLayoutNav() {
   }, [user, isLoading, profile, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
-    return <AppSplashScreen />;
+    return null;
   }
 
   const navTheme = nightMode
