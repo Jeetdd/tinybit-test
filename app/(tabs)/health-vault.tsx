@@ -91,11 +91,11 @@ type ForecastResult = {
 
 type FileInfo = { uri: string; name: string; size?: number; mimeType?: string; base64?: string };
 
-const CATEGORIES = ["Reports", "Prescriptions", "X-Rays"] as const;
+const CATEGORIES = ["Reports", "Prescriptions", "X-Rays", "Blood Tests"] as const;
 type Category = typeof CATEGORIES[number];
 
 const FILTERS = ["All", ...CATEGORIES];
-const FILTER_LABELS = ["All", "Reports", "Prescription", "X-Rays"];
+const FILTER_LABELS = ["All", "Reports", "Prescription", "X-Rays", "Blood Tests"];
 
 function iconForCategory(cat: string): string {
   switch (cat) {
@@ -203,6 +203,10 @@ export default function HealthVaultScreen() {
   // Multi-select for combined forecasting
   const [selectMode,  setSelectMode]  = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Manual category picker (AI fallback)
+  const [pendingFile,         setPendingFile]         = useState<FileInfo | null>(null);
+  const [manualCategoryModal, setManualCategoryModal] = useState(false);
 
   // Share to doctor
   const [sharePickerModal, setSharePickerModal] = useState(false);
@@ -370,6 +374,11 @@ export default function HealthVaultScreen() {
 
         if (uploadError) {
           console.warn('[Health Vault] Supabase upload failed:', uploadError.message);
+          Alert.alert(
+            "Upload Error",
+            `Could not upload file to cloud storage: ${uploadError.message}\n\nRun migration 047 in Supabase if this is a new project.`,
+          );
+          return;
         } else {
           const { data: urlData } = supabase.storage
             .from('health-records')
@@ -487,7 +496,8 @@ export default function HealthVaultScreen() {
 
     if (!aiResult) {
       setAiLoading(false);
-      Alert.alert("AI Unavailable", "Could not analyze the document. Please check your connection and try again.");
+      setPendingFile({ uri, name, mimeType, base64 });
+      setManualCategoryModal(true);
       return;
     }
 
@@ -497,7 +507,7 @@ export default function HealthVaultScreen() {
       return;
     }
 
-    const category: Category = aiResult.category ?? "Reports";
+    const category: Category = (aiResult.category as Category) ?? "Reports";
     await saveRecord({ uri, name, mimeType, base64 }, category);
     setAiLoading(false);
   };
@@ -545,7 +555,8 @@ export default function HealthVaultScreen() {
 
           if (!aiResult) {
             setAiLoading(false);
-            Alert.alert("AI Unavailable", "Could not analyze the document. Please check your connection and try again.");
+            setPendingFile({ uri: a.uri, name: a.name, size: a.size ?? undefined, mimeType: a.mimeType ?? "application/pdf", base64: base64 ?? undefined });
+            setManualCategoryModal(true);
             return;
           }
           if (!aiResult.isReport) {
@@ -555,7 +566,7 @@ export default function HealthVaultScreen() {
           }
           await saveRecord(
             { uri: a.uri, name: a.name, size: a.size ?? undefined, mimeType: a.mimeType ?? "application/pdf", base64: base64 ?? undefined },
-            aiResult.category ?? "Reports",
+            (aiResult.category as Category) ?? "Reports",
           );
           setAiLoading(false);
         } else {
@@ -567,6 +578,15 @@ export default function HealthVaultScreen() {
         }
       }
     } catch { /* cancelled */ }
+  };
+
+  const handleManualCategory = async (category: Category) => {
+    if (!pendingFile) return;
+    setManualCategoryModal(false);
+    setAiLoading(true);
+    await saveRecord(pendingFile, category);
+    setAiLoading(false);
+    setPendingFile(null);
   };
 
   // ── View ───────────────────────────────────────────────────────
@@ -1170,6 +1190,41 @@ export default function HealthVaultScreen() {
                 <Text style={[s.cancelText, { color: C.white }]}>Try Again</Text>
               </Pressable>
               <Pressable style={s.cancelBtn} onPress={() => setNotReportModal(false)}>
+                <Text style={s.cancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Animated.View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Manual Category Modal (AI fallback) ── */}
+      <Modal
+        visible={manualCategoryModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setManualCategoryModal(false); setPendingFile(null); }}
+      >
+        <Pressable style={s.overlay} onPress={() => { setManualCategoryModal(false); setPendingFile(null); }}>
+          <Animated.View entering={FadeInUp} style={s.sheet}>
+            <View style={s.handle} />
+            <View style={s.notReportIcon}>
+              <Ionicons name="folder-open-outline" size={48} color={C.accent} />
+            </View>
+            <Text style={s.sheetTitle}>Select Document Type</Text>
+            <Text style={s.sheetSub}>
+              AI classification is unavailable. Please choose the category to upload your document.
+            </Text>
+            <View style={{ gap: 12, marginTop: 4 }}>
+              {CATEGORIES.map(cat => (
+                <Pressable
+                  key={cat}
+                  style={[s.cancelBtn, { backgroundColor: C.navy }]}
+                  onPress={() => handleManualCategory(cat)}
+                >
+                  <Text style={[s.cancelText, { color: C.white }]}>{cat}</Text>
+                </Pressable>
+              ))}
+              <Pressable style={s.cancelBtn} onPress={() => { setManualCategoryModal(false); setPendingFile(null); }}>
                 <Text style={s.cancelText}>Cancel</Text>
               </Pressable>
             </View>

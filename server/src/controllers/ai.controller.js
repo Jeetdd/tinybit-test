@@ -688,7 +688,7 @@ const healthForecast = async (req, res) => {
             ],
           }],
           generationConfig: { maxOutputTokens: 1200, temperature: 0.2 },
-        }, 60_000);   // large PDFs need up to ~45 s
+        }, 20_000);   // keep under Railway's ~30 s proxy timeout
 
         if (geminiResp.ok) {
           const json    = await geminiResp.json();
@@ -806,7 +806,7 @@ const healthForecastMulti = async (req, res) => {
       const geminiResp = await geminiFetch(GEMINI_MODEL_VISION, {
         contents: [{ parts }],
         generationConfig: { maxOutputTokens: 1500, temperature: 0.2 },
-      }, 90_000);   // larger timeout — processing N documents takes longer
+      }, 40_000);   // keep under Railway's ~60 s proxy timeout even with N documents
 
       if (geminiResp.ok) {
         const json    = await geminiResp.json();

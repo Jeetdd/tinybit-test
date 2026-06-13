@@ -630,7 +630,7 @@ function ElderHomeScreen() {
             <GridItem title={ht.memoryJournal} sub="Journal & diary" color="#F97316" img={require('../../assets/images/my_memories.png')} target="/journal" />
             <GridItem title={ht.mindGames} sub="Puzzles & exercises" color="#475569" img={require('../../assets/images/brain_games.png')} target="/mind-games" />
             <GridItem title={ht.moodLift} sub="Track & boost your mood" color="#22C55E" img={require('../../assets/images/mood_lift.png')} target="/mood-lift" />
-            <GridItem title={ht.dailyCheckIn} sub="Daily health check-in" color="#A855F7" img={require('../../assets/images/daily_wellness.png')} target="/daily-check-in" />
+            <GridItem title={ht.dailyCheckIn} sub="Daily health check-in" color="#A855F7" img={require('../../assets/images/daily_wellness.png')} target="/daily-health-checkin" />
           </View>
 
           {/* 6b — Health Tools Row */}

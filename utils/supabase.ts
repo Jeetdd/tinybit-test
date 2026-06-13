@@ -4,13 +4,29 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
-// Polyfill crypto.subtle so Supabase uses S256 PKCE instead of falling back to
-// 'plain', which causes "code challenge does not match" errors on Android/Hermes.
+// Full WebCrypto polyfill for Hermes/React Native.
+// Supabase PKCE needs both crypto.getRandomValues (verifier generation) and
+// crypto.subtle.digest (S256 challenge). Hermes ships neither.
 if (!(globalThis as any).crypto) (globalThis as any).crypto = {};
+
+if (typeof (globalThis as any).crypto.getRandomValues !== 'function') {
+  (globalThis as any).crypto.getRandomValues = <T extends ArrayBufferView>(array: T): T =>
+    ExpoCrypto.getRandomValues(array as any) as unknown as T;
+}
+
 if (!(globalThis as any).crypto.subtle) {
+  const ALGO_MAP: Record<string, ExpoCrypto.CryptoDigestAlgorithm> = {
+    'SHA-1':   ExpoCrypto.CryptoDigestAlgorithm.SHA1,
+    'SHA-256': ExpoCrypto.CryptoDigestAlgorithm.SHA256,
+    'SHA-384': ExpoCrypto.CryptoDigestAlgorithm.SHA384,
+    'SHA-512': ExpoCrypto.CryptoDigestAlgorithm.SHA512,
+  };
   (globalThis as any).crypto.subtle = {
-    digest: (_algo: string, data: ArrayBuffer) =>
-      ExpoCrypto.digest(ExpoCrypto.CryptoDigestAlgorithm.SHA256, new Uint8Array(data)),
+    digest: (algo: string | { name: string }, data: ArrayBuffer) => {
+      const name = typeof algo === 'string' ? algo : algo.name;
+      const expoAlgo = ALGO_MAP[name] ?? ExpoCrypto.CryptoDigestAlgorithm.SHA256;
+      return ExpoCrypto.digest(expoAlgo, new Uint8Array(data));
+    },
   };
 }
 

@@ -33,17 +33,18 @@ export default function TabLayout() {
       <Tabs.Screen name="doctors"          options={{ href: null, title: 'Doctors' }} />
 
       {/* ── Elder feature screens (hidden from tab bar) ── */}
-      <Tabs.Screen name="health-vault"     options={{ href: null }} />
-      <Tabs.Screen name="daily-check-in"   options={{ href: null }} />
-      <Tabs.Screen name="care-calendar"    options={{ href: null }} />
-      <Tabs.Screen name="family-messages"  options={{ href: null }} />
-      <Tabs.Screen name="mind-games"       options={{ href: null }} />
-      <Tabs.Screen name="sos"             options={{ href: null }} />
-      <Tabs.Screen name="modal"           options={{ href: null }} />
+      <Tabs.Screen name="health-vault"           options={{ href: null }} />
+      <Tabs.Screen name="daily-health-checkin"   options={{ href: null, title: 'Daily Check-In' }} />
+      <Tabs.Screen name="daily-check-in"         options={{ href: null }} />
+      <Tabs.Screen name="care-calendar"          options={{ href: null }} />
+      <Tabs.Screen name="family-messages"        options={{ href: null }} />
+      <Tabs.Screen name="mind-games"             options={{ href: null }} />
+      <Tabs.Screen name="sos"                    options={{ href: null }} />
+      <Tabs.Screen name="modal"                  options={{ href: null }} />
 
-      {/* ── New feature screens (hidden from tab bar) ── */}
-      <Tabs.Screen name="wellness-logs"   options={{ href: null, title: 'Wellness Logs' }} />
-      <Tabs.Screen name="health-log"      options={{ href: null, title: 'Health Log' }} />
+      {/* ── Legacy screens (kept for backward-compat, superseded by daily-health-checkin) ── */}
+      <Tabs.Screen name="wellness-logs"          options={{ href: null, title: 'Wellness Logs' }} />
+      <Tabs.Screen name="health-log"             options={{ href: null, title: 'Health Log' }} />
     </Tabs>
   );
 }
