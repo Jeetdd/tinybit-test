@@ -330,26 +330,19 @@ export default function WeatherScreen() {
   }) => {
     setClothingLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) { setClothingLoading(false); return; }
-
-      const clothingController = new AbortController();
-      const clothingTimeout = setTimeout(() => clothingController.abort(), 20_000);
       const res = await fetch(`${API_BASE_URL}/ai/suggest-clothing`, {
         method: "POST",
-        signal: clothingController.signal,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
       });
-      clearTimeout(clothingTimeout);
 
       if (res.ok) {
         const json = await res.json();
         if (json.success) setClothing(json.data);
       }
-    } catch { /* fail silently */ }
-    finally { setClothingLoading(false); }
+    } catch (e: any) {
+      console.warn("[Weather] Clothing suggestion failed:", e?.message);
+    } finally { setClothingLoading(false); }
   };
 
   const onRefresh = useCallback(async () => {

@@ -16,21 +16,21 @@ const {
   mealRecommendations,
 } = require('../controllers/ai.controller');
 
-// Sathi AI core
+// Sathi AI core — chat & conversation use req.supabase.userId for memory persistence
 router.post('/chat',            requireSupabaseAuth, chat);
 router.delete('/conversation',  requireSupabaseAuth, clearConversation);
-router.post('/transcribe',      requireSupabaseAuth, transcribe);
-router.post('/tts',             requireSupabaseAuth, tts);
+router.post('/transcribe',      transcribe);          // no user data — just Whisper transcription
+router.post('/tts',             tts);                 // no user data — just speech synthesis
 
-// Health document analysis
-router.post('/analyze-report',  requireSupabaseAuth, analyzeReport);
+// Health document analysis — pure vision/analysis, no user data read/written
+router.post('/analyze-report',        analyzeReport);
+router.post('/analyze-food',          analyzeFood);
+router.post('/suggest-clothing',      suggestClothing);
+router.post('/wellness-summary',      wellnessSummary);
+router.post('/health-forecast',       healthForecast);
+router.post('/health-forecast-multi', healthForecastMulti);
 
-// New AI features
-router.post('/analyze-food',    requireSupabaseAuth, analyzeFood);       // Calorie calculator
-router.post('/suggest-clothing',requireSupabaseAuth, suggestClothing);   // Weather AI suggestions
-router.post('/wellness-summary',requireSupabaseAuth, wellnessSummary);   // Wellness log AI summary
-router.post('/health-forecast',         requireSupabaseAuth, healthForecast);         // Single record AI insights
-router.post('/health-forecast-multi',   requireSupabaseAuth, healthForecastMulti);   // Multi-record trend analysis
-router.post('/meal-recommendations',    requireSupabaseAuth, mealRecommendations);    // Personalised meal suggestions
+// Meal recommendations — userId used optionally for health context (graceful without)
+router.post('/meal-recommendations',  mealRecommendations);
 
 module.exports = router;
