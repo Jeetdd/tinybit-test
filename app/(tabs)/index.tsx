@@ -634,11 +634,7 @@ function ElderHomeScreen() {
           </View>
 
           {/* 6b — Health Tools Row */}
-          <View style={[s.sectionHeader, { marginTop: 22 }]}>
-            <Text style={[s.sectionTitle, { color: themeColors.text }]}>Health Tools</Text>
-          </View>
-          <View style={s.toolsGrid}>
-            <ToolCard img={require('../../assets/images/health_log.png')} title="Health Log" sub="Vitals, sleep, water" color="#EF4444" target="/(tabs)/health-log" />
+          <View style={[s.toolsGrid, { marginTop: 22 }]}>
             <ToolCard img={require('../../assets/images/weather.png')} title="Weather" sub="Clothing suggestions" color="#F59E0B" target="/weather" />
             <ToolCard img={require('../../assets/images/calorie_tracker.png')} title="Calorie Tracker" sub="Food & nutrition" color="#16A34A" target="/calorie-calculator" />
             <ToolCard img={require('../../assets/images/help_guide.png')} title="Help & Guide" sub="Learn how to use" color="#6366F1" target="/help" />
