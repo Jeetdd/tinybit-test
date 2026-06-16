@@ -52,7 +52,6 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { id: 'elders', label: 'Elders', icon: <Users2 className="w-4 h-4" />, path: '/users/elders' },
       { id: 'guardians', label: 'Guardians', icon: <UserCheck className="w-4 h-4" />, path: '/users/guardians' },
-      { id: 'family-circle', label: 'Family Circle', icon: <Users className="w-4 h-4" />, path: '/users/family-circle' },
     ],
   },
   {
