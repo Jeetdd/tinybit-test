@@ -47,6 +47,15 @@ export default function EditProfileScreen() {
   const [emergencyName, setEmergencyName] = useState(isEditingElder ? '' : (profile?.emergencyName || ""));
   const [avatar, setAvatar] = useState(isEditingElder ? '' : (profile?.avatar_url || ""));
 
+  // Health info state
+  const [height, setHeight] = useState(isEditingElder ? '' : (profile?.height || ""));
+  const [weight, setWeight] = useState(isEditingElder ? '' : (profile?.weight || ""));
+  const [bloodGroup, setBloodGroup] = useState(isEditingElder ? '' : (profile?.bloodGroup || ""));
+  const [conditionsText, setConditionsText] = useState(isEditingElder ? '' : ((profile?.medicalConditions ?? []).join(', ')));
+  const [medicationsText, setMedicationsText] = useState(isEditingElder ? '' : ((profile?.medications ?? []).map((m: any) => `${m.name || m}${m.dosage ? ` ${m.dosage}` : ''}`).join(', ')));
+  const [doctorName, setDoctorName] = useState(isEditingElder ? '' : (profile?.doctorName || ""));
+  const [doctorContact, setDoctorContact] = useState(isEditingElder ? '' : (profile?.doctorContact || ""));
+
   // Fetch the elder's profile data when guardian opens this screen
   useEffect(() => {
     if (!isEditingElder || !targetUserId) return;
@@ -61,6 +70,13 @@ export default function EditProfileScreen() {
         setEmergencyPhone(data.emergency_phone || '');
         setEmergencyName(data.emergency_name || '');
         setAvatar(data.profile_image || '');
+        setHeight(data.height || '');
+        setWeight(data.weight || '');
+        setBloodGroup(data.blood_group || '');
+        setConditionsText((data.medical_conditions ?? []).join(', '));
+        setMedicationsText((data.medications ?? []).map((m: any) => `${m.name || m}${m.dosage ? ` ${m.dosage}` : ''}`).join(', '));
+        setDoctorName(data.doctor_name || '');
+        setDoctorContact(data.doctor_contact || '');
       }
       setFetching(false);
     });
@@ -82,6 +98,13 @@ export default function EditProfileScreen() {
     if (!editingId) return;
     setLoading(true);
     try {
+      const parsedConditions = conditionsText.trim()
+        ? conditionsText.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+      const parsedMedications = medicationsText.trim()
+        ? medicationsText.split(',').map(s => ({ name: s.trim() })).filter(m => m.name)
+        : [];
+
       const { error } = await supabase.from('profiles').update({
         full_name: name,
         mobile: mobile,
@@ -92,6 +115,13 @@ export default function EditProfileScreen() {
         emergency_phone: emergencyPhone,
         emergency_name: emergencyName,
         profile_image: avatar,
+        height: height || null,
+        weight: weight || null,
+        blood_group: bloodGroup || null,
+        medical_conditions: parsedConditions.length ? parsedConditions : null,
+        medications: parsedMedications.length ? parsedMedications : null,
+        doctor_name: doctorName || null,
+        doctor_contact: doctorContact || null,
       }).eq('id', editingId);
 
       if (error) throw error;
@@ -201,6 +231,57 @@ export default function EditProfileScreen() {
               <Label>Contact Number</Label>
               <TextInput style={s.input} value={emergencyPhone} onChangeText={setEmergencyPhone} placeholder="Phone number" keyboardType="phone-pad" />
 
+              <View style={s.divider} />
+              <Text style={s.secTitle}>Health Information</Text>
+
+              <View style={s.row}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Label>Height (cm)</Label>
+                  <TextInput style={s.input} value={height} onChangeText={setHeight} placeholder="e.g. 165" keyboardType="numeric" />
+                </View>
+                <View style={{ width: 16 }} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Label>Weight (kg)</Label>
+                  <TextInput style={s.input} value={weight} onChangeText={setWeight} placeholder="e.g. 68" keyboardType="numeric" />
+                </View>
+              </View>
+
+              <Label>Blood Group</Label>
+              <View style={s.genderRow}>
+                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                  <Pressable key={bg} onPress={() => setBloodGroup(bg)} style={[s.chipBtn, bloodGroup === bg && s.chipBtnActive]}>
+                    <Text style={[s.chipText, bloodGroup === bg && s.chipTextActive]}>{bg}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Label>Medical Conditions</Label>
+              <TextInput
+                style={[s.input, { minHeight: 60 }]}
+                value={conditionsText}
+                onChangeText={setConditionsText}
+                placeholder="e.g. Diabetes, Hypertension (comma separated)"
+                multiline
+              />
+
+              <Label>Current Medications</Label>
+              <TextInput
+                style={[s.input, { minHeight: 60 }]}
+                value={medicationsText}
+                onChangeText={setMedicationsText}
+                placeholder="e.g. Metformin 500mg, Amlodipine 5mg (comma separated)"
+                multiline
+              />
+
+              <View style={s.divider} />
+              <Text style={s.secTitle}>Doctor Information</Text>
+
+              <Label>Doctor's Name</Label>
+              <TextInput style={s.input} value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Name" />
+
+              <Label>Doctor's Contact</Label>
+              <TextInput style={s.input} value={doctorContact} onChangeText={setDoctorContact} placeholder="Phone or clinic number" keyboardType="phone-pad" />
+
               <Pressable onPress={handleSave} disabled={loading} style={[s.saveBtn, loading && { opacity: 0.7 }]}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>Save Changes</Text>}
               </Pressable>
@@ -234,11 +315,15 @@ const s = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 4, marginLeft: 4 },
   input: { backgroundColor: '#fff', borderRadius: 12, padding: 16, fontSize: 16, color: C.text, borderWidth: 1, borderColor: C.border },
   row: { flexDirection: 'row' },
-  genderRow: { flexDirection: 'row', gap: 8 },
+  genderRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   genderBtn: { flex: 1, backgroundColor: '#fff', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: 'center' },
   genderBtnActive: { backgroundColor: C.blue, borderColor: C.blue },
   genderText: { fontSize: 14, fontWeight: '700', color: C.text },
   genderTextActive: { color: '#fff' },
+  chipBtn: { paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#fff', borderRadius: 20, borderWidth: 1, borderColor: C.border },
+  chipBtnActive: { backgroundColor: C.blue, borderColor: C.blue },
+  chipText: { fontSize: 13, fontWeight: '700', color: C.text },
+  chipTextActive: { color: '#fff' },
   divider: { height: 1, backgroundColor: C.border, marginVertical: 10 },
   secTitle: { fontSize: 18, fontWeight: '800', color: C.text, marginBottom: 4 },
   saveBtn: { backgroundColor: C.headerStart, padding: 18, borderRadius: 16, alignItems: 'center', marginTop: 20 },

@@ -43,7 +43,7 @@ const MOOD_SUGGESTIONS: Record<string, { icon: string; text: string }[]> = {
   Happy: [
     { icon: "share-social-outline", text: "Share this joy with family" },
     { icon: "journal-outline",      text: "Write it in your Memory Journal" },
-    { icon: "musical-notes-outline",text: "Listen to your favourite Bhajans" },
+    { icon: "musical-notes-outline",text: "Enjoy your favourite Entertainment" },
   ],
   Tired: [
     { icon: "bed-outline",          text: "Take a short 15-min nap" },
@@ -63,10 +63,10 @@ const MOOD_SUGGESTIONS: Record<string, { icon: string; text: string }[]> = {
 };
 
 const EXPLORE = [
-  { id: "bhajans",    title: "Bhajans",      badge: "#F59E0B", image: require("../assets/images/Bhajans.png")     },
-  { id: "meditation", title: "Meditation",   badge: "#2B7FC0", image: require("../assets/images/Meditation.png")  },
-  { id: "jokes",      title: "Joke & Fun",   badge: "#EAB308", image: require("../assets/images/Joke-Fun.png")    },
-  { id: "nature",     title: "Nature Sound", badge: "#16A34A", image: require("../assets/images/Naturesound.png") },
+  { id: "entertainment", title: "Entertainment", badge: "#F59E0B", image: require("../assets/images/Bhajans.png")     },
+  { id: "meditation",    title: "Meditation",    badge: "#2B7FC0", image: require("../assets/images/Meditation.png")  },
+  { id: "jokes",         title: "Joke & Fun",    badge: "#EAB308", image: require("../assets/images/Joke-Fun.png")    },
+  { id: "nature",        title: "Nature Sound",  badge: "#16A34A", image: require("../assets/images/Naturesound.png") },
 ];
 
 const RELAXATION_EXERCISES = [

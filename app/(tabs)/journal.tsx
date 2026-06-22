@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 import { requestRecordingPermissionsAsync, setAudioModeAsync, RecordingPresets, useAudioRecorder, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useAuth } from "../../context/AuthContext";
@@ -276,19 +277,55 @@ export default function JournalScreen() {
     } catch (err: any) { Alert.alert("Error", err.message); } finally { setSaving(false); }
   };
 
-  const generatePDF = async () => {
+  const buildMemoriesHTML = () => {
     const textMemories = memories.filter(m => m.type !== 'Voice');
-    if (textMemories.length === 0) return Alert.alert("No Memories", "Write some text memories first to create a PDF.");
-    const html = `<html><body style="font-family:sans-serif;padding:40px;">
+    return { textMemories, html: `<html><body style="font-family:sans-serif;padding:40px;">
       <h1 style="color:#4AA5D9;text-align:center;">My Memories</h1>
+      <p style="text-align:center;color:#999;">Generated on ${new Date().toLocaleDateString()}</p>
       ${textMemories.map(m => `<div style="margin-bottom:30px;border-bottom:1px solid #eee;padding-bottom:10px;">
         <div style="font-weight:bold;color:#777;">${new Date(m.created_at).toLocaleDateString()}</div>
         <div style="font-size:18px;">${m.content}</div></div>`).join('')}
-    </body></html>`;
+    </body></html>` };
+  };
+
+  const downloadPDF = async () => {
+    const { textMemories, html } = buildMemoriesHTML();
+    if (textMemories.length === 0) return Alert.alert("No Memories", "Write some text memories first to create a PDF.");
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      const fileName = `TinyBit_Memories_${new Date().toISOString().split('T')[0]}.pdf`;
+      const destPath = `${FileSystem.documentDirectory}${fileName}`;
+      await FileSystem.copyAsync({ from: uri, to: destPath });
+      Alert.alert(
+        "✅ PDF Downloaded!",
+        `Your memories have been saved to:\n${destPath}`,
+        [
+          { text: "Open File", onPress: () => Sharing.shareAsync(destPath, { UTI: '.pdf', mimeType: 'application/pdf' }) },
+          { text: "OK", style: "cancel" },
+        ],
+      );
+    } catch (err: any) { Alert.alert("Error", err.message); }
+  };
+
+  const sharePDF = async () => {
+    const { textMemories, html } = buildMemoriesHTML();
+    if (textMemories.length === 0) return Alert.alert("No Memories", "Write some text memories first to create a PDF.");
     try {
       const { uri } = await Print.printToFileAsync({ html });
       await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
     } catch (err: any) { Alert.alert("Error", err.message); }
+  };
+
+  const generatePDF = () => {
+    Alert.alert(
+      "PDF Options",
+      "What would you like to do?",
+      [
+        { text: "⬇️ Download to Device", onPress: downloadPDF },
+        { text: "📤 Share PDF", onPress: sharePDF },
+        { text: "Cancel", style: "cancel" },
+      ],
+    );
   };
 
   const todayWeekday = new Date().toLocaleDateString('en-US', {weekday: 'long'} as const);

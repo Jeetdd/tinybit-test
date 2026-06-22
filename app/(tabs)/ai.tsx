@@ -108,6 +108,23 @@ interface Message {
   time: string;
 }
 
+function buildHealthContext(profile: any): string {
+  if (!profile) return "";
+  const parts: string[] = [];
+  if (profile.fullName) parts.push(`User: ${profile.fullName}`);
+  if (profile.age) parts.push(`Age: ${profile.age}`);
+  if (profile.biologicalSex) parts.push(`Sex: ${profile.biologicalSex}`);
+  if (profile.bloodGroup) parts.push(`Blood group: ${profile.bloodGroup}`);
+  if (profile.height && profile.weight) parts.push(`Height: ${profile.height} ${profile.heightUnit ?? ""}, Weight: ${profile.weight} ${profile.weightUnit ?? ""}`);
+  if (profile.medicalConditions?.length) parts.push(`Medical conditions: ${profile.medicalConditions.join(', ')}`);
+  if (profile.medications?.length) {
+    const meds = profile.medications.map((m: any) => `${m.name}${m.dosage ? ` ${m.dosage}` : ""}${m.timing ? ` (${m.timing})` : ""}`).join(', ');
+    parts.push(`Current medications: ${meds}`);
+  }
+  if (profile.doctorName) parts.push(`Doctor: ${profile.doctorName}`);
+  return parts.join('. ');
+}
+
 export default function TinyAIScreen() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
@@ -151,9 +168,11 @@ export default function TinyAIScreen() {
       .filter(m => m.id !== "greeting")
       .map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text }));
 
+    const healthCtx = buildHealthContext(profile);
+    const systemPrompt = `You are Saathi, a compassionate AI health companion for elderly users. ${healthCtx ? `Patient profile — ${healthCtx}.` : ""} Always be warm, supportive, and concise. For medical questions give general guidance and remind the user to consult their doctor. IMPORTANT: Detect the language of the user's message and respond in that exact language only. No meta-commentary about language.`;
     const reply = await sathiAi.chat(
       [...history, { role: "user", content: text }],
-      `User Name: ${profile?.fullName || "Friend"}. IMPORTANT: Detect the language of the user's message and respond in that exact language only. No meta-commentary about language.`,
+      systemPrompt,
     );
 
     setMessages(prev => [...prev, {
@@ -191,7 +210,9 @@ export default function TinyAIScreen() {
           .filter(m => m.id !== "greeting")
           .map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text })) as any[];
         setMessages(prev => [...prev, userMsg]);
-        const reply = await sathiAi.chat(history, `User Name: ${profile?.fullName || "Friend"}. IMPORTANT: Detect the language of the user's message and respond in that exact language only. No meta-commentary about language.`);
+        const healthCtx = buildHealthContext(profile);
+        const systemPrompt = `You are Saathi, a compassionate AI health companion for elderly users. ${healthCtx ? `Patient profile — ${healthCtx}.` : ""} Always be warm, supportive, and concise. For medical questions give general guidance and remind the user to consult their doctor. IMPORTANT: Detect the language of the user's message and respond in that exact language only. No meta-commentary about language.`;
+        const reply = await sathiAi.chat(history, systemPrompt);
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
           sender: "tiny",
@@ -327,10 +348,12 @@ export default function TinyAIScreen() {
 
       <ScrollView
         ref={scrollViewRef}
-        contentContainerStyle={[s.chatScroll, { paddingBottom: TAB_BAR_HEIGHT + 80 }]}
+        contentContainerStyle={[s.chatScroll, { paddingBottom: TAB_BAR_HEIGHT + 100 }]}
         onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+        onLayout={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {messages.map((msg, index) =>
           msg.sender === "user" ? (
@@ -387,8 +410,8 @@ export default function TinyAIScreen() {
       </ScrollView>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.bottom + TAB_BAR_HEIGHT + 8 : 0}
         style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + TAB_BAR_HEIGHT }}
       >
         <View style={[s.chatInputArea, { paddingBottom: 8 }]}>

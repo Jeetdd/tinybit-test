@@ -17,6 +17,7 @@ type AuthContextType = {
   plan: UserPlan;
   isLoading: boolean;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   streak: number;
 };
@@ -283,8 +284,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await AsyncStorage.multiRemove(['userStreak', 'lastOpenDate']);
   };
 
+  const deleteAccount = async () => {
+    if (!user) return;
+    const uid = user.id;
+    Logger.auth(TAG, 'deleteAccount', { userId: uid });
+    try {
+      // Delete all user data in parallel (RLS allows users to delete own rows)
+      await Promise.allSettled([
+        supabase.from('medicines').delete().eq('user_id', uid),
+        supabase.from('medicine_logs').delete().eq('user_id', uid),
+        supabase.from('daily_check_ins').delete().eq('user_id', uid),
+        supabase.from('health_logs').delete().eq('user_id', uid),
+        supabase.from('ai_conversations').delete().eq('user_id', uid),
+        supabase.from('emergency_contacts').delete().eq('user_id', uid),
+        supabase.from('sos_alerts').delete().eq('user_id', uid),
+        supabase.from('journal').delete().eq('user_id', uid),
+        supabase.from('mood_entries').delete().eq('user_id', uid),
+        supabase.from('guardian_check_in_shares').delete().eq('elder_id', uid),
+        supabase.from('guardian_elder_links').delete().eq('elder_id', uid),
+        supabase.from('guardian_elder_links').delete().eq('guardian_id', uid),
+        supabase.from('notifications').delete().eq('user_id', uid),
+        supabase.from('user_plans').delete().eq('user_id', uid),
+      ]);
+      // Wipe profile fields so re-login treats this as a brand-new user
+      await supabase.from('profiles').update({
+        role: null,
+        age: null,
+        location: null,
+        biological_sex: null,
+        height: null,
+        weight: null,
+        blood_group: null,
+        emergency_phone: null,
+        emergency_name: null,
+        emergency_relation: null,
+        medical_conditions: null,
+        medications: null,
+        doctor_name: null,
+        doctor_contact: null,
+      }).eq('id', uid);
+    } catch (err) {
+      Logger.error(TAG, 'deleteAccount cleanup error (non-fatal)', err);
+    } finally {
+      setProfile(null);
+      setPlan(DEFAULT_PLAN);
+      await AsyncStorage.clear();
+      await supabase.auth.signOut();
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, profile, plan, isLoading, logout, refreshProfile, streak }}>
+    <AuthContext.Provider value={{ user, profile, plan, isLoading, logout, deleteAccount, refreshProfile, streak }}>
       {children}
     </AuthContext.Provider>
   );

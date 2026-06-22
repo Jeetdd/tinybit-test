@@ -99,12 +99,15 @@ function RootLayoutNav() {
 
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, age, first_name')
           .eq('id', sessionUser.id)
           .single();
 
         if (!active) return;
-        if (profileData?.role) {
+        // Only skip onboarding if the user has a role AND completed the about step (age set).
+        // Google OAuth pre-fills first_name, so first_name alone is not a reliable completion marker.
+        const onboardingComplete = profileData?.role && profileData?.age != null;
+        if (onboardingComplete) {
           router.replace('/(tabs)');
         } else {
           const names = deriveNamesFromUser(sessionUser);
@@ -168,7 +171,10 @@ function RootLayoutNav() {
             },
           }), 0);
         }
-      } else if (inOnboarding && profile?.firstName) {
+      } else if (inOnboarding && profile?.role && profile?.age != null) {
+        // Only redirect away from onboarding when the user has fully completed it
+        // (role + age both set). Google OAuth pre-fills firstName, so that alone
+        // cannot be used as an onboarding-completion marker.
         const onSetupScreen = PROFILE_SETUP_SCREENS.has(currentScreen ?? '');
         if (!onSetupScreen) {
           setTimeout(() => router.replace('/(tabs)'), 0);

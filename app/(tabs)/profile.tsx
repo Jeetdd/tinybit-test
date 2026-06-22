@@ -50,13 +50,12 @@ export default function ProfileScreen() {
 function ElderProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile, plan, logout, streak } = useAuth();
-  const { language, setLanguage, nightMode, setNightMode, fontSizeLabel, setFontSizeLabel, fontScale, colors: themeColors } = useLanguage();
+  const { profile, plan, logout, deleteAccount, streak } = useAuth();
+  const { language, setLanguage, fontSizeLabel, setFontSizeLabel, fontScale, colors: themeColors } = useLanguage();
   const { t } = useTranslation();
   const s = useMemo(() => scaleStyles(RAW_STYLES, fontScale), [fontScale]);
 
   // App Settings state
-  const [voiceNav, setVoiceNavState] = useState(false);
   const [vibration, setVibrationState] = useState(true);
   const [remindMeds, setRemindMedsState] = useState(true);
   const [remindCheckin, setRemindCheckinState] = useState(true);
@@ -67,9 +66,8 @@ function ElderProfileScreen() {
   const LANGUAGES: Language[] = ["English", "हिंदी", "ਪੰਜਾਬੀ", "हरियाणवी", "ગુજરાતી", "मराठी", "বাংলা", "தமிழ்", "తెలుగు", "മലയാളം"];
 
   useEffect(() => {
-    AsyncStorage.multiGet(['voiceNav', 'vibration', 'remindMeds', 'remindCheckin', 'remindGames']).then((pairs) => {
+    AsyncStorage.multiGet(['vibration', 'remindMeds', 'remindCheckin', 'remindGames']).then((pairs) => {
       const m: Record<string, string | null> = Object.fromEntries(pairs);
-      if (m.voiceNav    !== null) setVoiceNavState(m.voiceNav === 'true');
       if (m.vibration   !== null) setVibrationState(m.vibration === 'true');
       if (m.remindMeds  !== null) setRemindMedsState(m.remindMeds === 'true');
       if (m.remindCheckin !== null) setRemindCheckinState(m.remindCheckin === 'true');
@@ -350,40 +348,6 @@ function ElderProfileScreen() {
 
           <View style={s.itemDivider} />
 
-          {/* Voice Navigation */}
-          <View style={s.rowItem}>
-            <View style={s.iconCircle}><Ionicons name="mic-outline" size={18} color={C.white} /></View>
-            <View style={s.itemInfo}>
-              <Text style={[s.itemTitle, { color: themeColors.text }]}>{t('voiceNavigation')}</Text>
-              <Text style={[s.itemSub, { color: themeColors.muted }]}>{t('navigateByVoice')}</Text>
-            </View>
-            <Switch
-              value={voiceNav}
-              onValueChange={(v) => toggle('voiceNav', v, setVoiceNavState)}
-              trackColor={{ false: '#DDE3EC', true: C.blue }}
-              thumbColor={C.white}
-            />
-          </View>
-
-          <View style={s.itemDivider} />
-
-          {/* Night Mode */}
-          <View style={s.rowItem}>
-            <View style={s.iconCircle}><Ionicons name="moon-outline" size={18} color={C.white} /></View>
-            <View style={s.itemInfo}>
-              <Text style={[s.itemTitle, { color: themeColors.text }]}>{t('nightMode')}</Text>
-              <Text style={[s.itemSub, { color: themeColors.muted }]}>{t('easierOnEyes')}</Text>
-            </View>
-            <Switch
-              value={nightMode}
-              onValueChange={(v) => setNightMode(v)}
-              trackColor={{ false: '#DDE3EC', true: C.blue }}
-              thumbColor={C.white}
-            />
-          </View>
-
-          <View style={s.itemDivider} />
-
           {/* Vibration Alerts */}
           <View style={s.rowItem}>
             <View style={s.iconCircle}><Ionicons name="phone-portrait-outline" size={18} color={C.white} /></View>
@@ -482,7 +446,19 @@ function ElderProfileScreen() {
                 `${t('deleteConfirm')} ${t('deleteWarning')}`,
                 [
                   { text: t('cancel'), style: 'cancel' },
-                  { text: t('deleteAccount'), style: 'destructive', onPress: () => logout() },
+                  {
+                    text: t('deleteAccount'),
+                    style: 'destructive',
+                    onPress: () =>
+                      Alert.alert(
+                        'Confirm Deletion',
+                        'This will permanently erase ALL your health data, medicines, check-ins, and profile. This cannot be undone.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Delete Everything', style: 'destructive', onPress: deleteAccount },
+                        ],
+                      ),
+                  },
                 ],
               )
             }

@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -193,6 +194,7 @@ function ElderHomeScreen() {
   const [latestMessage, setLatestMessage] = useState<any>(null);
   const [todayMood, setTodayMood] = useState<string>("—");
   const [locationSharing, setLocationSharing] = useState<boolean | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(useCallback(() => {
     if (!user) return;
@@ -273,12 +275,25 @@ function ElderHomeScreen() {
     }
   };
 
+  const handleRefresh = async () => {
+    if (!user) return;
+    setRefreshing(true);
+    await Promise.allSettled([
+      fetchMedicines(),
+      fetchHealthStats(),
+      fetchTodayMood(),
+      fetchLatestMessage(),
+    ]);
+    setRefreshing(false);
+  };
+
   const fetchLatestMessage = async () => {
     try {
       const { data, error } = await supabase
         .from('family_messages')
         .select('*, sender:profiles!sender_id (full_name)')
         .eq('receiver_id', user?.id)
+        .eq('type', 'voice')
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -416,8 +431,16 @@ function ElderHomeScreen() {
       <View style={[s.scrollSheet, { backgroundColor: themeColors.bg }]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          bounces={false}
+          bounces={true}
           contentContainerStyle={{ paddingBottom: 150, paddingTop: 18 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#2B3C86"
+              colors={["#2B3C86", "#2E9CD6"]}
+            />
+          }
         >
           {/* Guardian connection requests */}
           <GuardianInviteCard />
@@ -601,10 +624,11 @@ function ElderHomeScreen() {
                 </Pressable>
               </>
             ) : (
-              <View style={[s.emptyPanel, { backgroundColor: themeColors.card }]}>
+              <Pressable style={[s.emptyPanel, { backgroundColor: themeColors.card }]} onPress={() => router.push('/family-messages')}>
                 <Ionicons name="chatbubble-ellipses-outline" size={22} color="#7A90A4" />
                 <Text style={s.emptyPanelText}>No voice messages yet.</Text>
-              </View>
+                <Text style={[s.emptyPanelText, { color: '#4AA5D9', marginTop: 4, fontSize: 12 }]}>Open Voice Message Center</Text>
+              </Pressable>
             )}
           </View>
 

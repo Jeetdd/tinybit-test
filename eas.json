@@ -10,10 +10,11 @@
       "channel": "development",
       "node": "20.18.0",
       "cache": {
-        "key": "dev-v2"
+        "key": "dev-v3"
       },
       "env": {
-        "npm_config_legacy_peer_deps": "true"
+        "npm_config_legacy_peer_deps": "true",
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a,x86_64"
       }
     },
     "preview": {
@@ -24,12 +25,13 @@
       },
       "node": "20.18.0",
       "cache": {
-        "key": "preview-v2"
+        "key": "preview-v3"
       },
       "env": {
         "npm_config_legacy_peer_deps": "true",
         "EXPO_PUBLIC_API_BASE_URL": "https://tinybit-test-production.up.railway.app/api",
-        "EXPO_PUBLIC_OWM_API_KEY": "5469a7d05ccb92456657709cced7668e"
+        "EXPO_PUBLIC_OWM_API_KEY": "5469a7d05ccb92456657709cced7668e",
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a,x86_64"
       }
     },
     "production": {
@@ -37,7 +39,7 @@
       "autoIncrement": true,
       "node": "20.18.0",
       "cache": {
-        "key": "prod-v2"
+        "key": "prod-v3"
       },
       "env": {
         "npm_config_legacy_peer_deps": "true",

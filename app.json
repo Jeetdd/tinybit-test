@@ -16,7 +16,6 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "t.i.n.y.b.i.t.E.C",
-      "usesCleartextTraffic": true,
       "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "config": {

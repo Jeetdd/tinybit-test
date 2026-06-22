@@ -34,6 +34,7 @@ import { tr } from "../../constants/appTranslations";
 import { getCountryEmergency } from "../../constants/emergencyNumbers";
 import CountryPickerModal from "../../components/CountryPickerModal";
 import type { Country } from "../../constants/countries";
+import { COUNTRIES } from "../../constants/countries";
 import { supabase } from "../../utils/supabase";
 import { notifyGuardiansOf } from "../../services/notifications";
 
@@ -100,8 +101,20 @@ export default function SOSScreen() {
   const [editingContact, setEditingContact] = useState<EmergencyContact>({
     name: "", role: "", initials: "", color: "", phone: "",
   });
-  const [dialCode, setDialCode] = useState("+91");
+  // Default dial code from user's country profile; fallback to +91 (India)
+  const profileDialCode = profile?.countryCode
+    ? (COUNTRIES.find(c => c.code === profile.countryCode)?.dial ?? "+91")
+    : "+91";
+  const [dialCode, setDialCode] = useState(profileDialCode);
   const [showDialPicker, setShowDialPicker] = useState(false);
+
+  // Sync dial code when profile loads
+  useEffect(() => {
+    if (profile?.countryCode) {
+      const found = COUNTRIES.find(c => c.code === profile.countryCode);
+      if (found) setDialCode(found.dial);
+    }
+  }, [profile?.countryCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load persisted emergency contacts from Supabase
   useEffect(() => {
@@ -237,10 +250,12 @@ export default function SOSScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     if (!user?.id) return;
+    const name = profile?.fullName || profile?.firstName || 'Your elder';
+
     // Log the alert
     await supabase.from('sos_alerts').insert({ user_id: user.id });
-    // Notify all connected guardians
-    const name = profile?.fullName || profile?.firstName || 'Your elder';
+
+    // Notify all connected guardians via push/in-app
     await notifyGuardiansOf(
       user.id,
       user.id,
@@ -248,6 +263,22 @@ export default function SOSScreen() {
       `🆘 SOS Alert — ${name}`,
       `${name} has triggered an emergency SOS. Please check on them immediately.`,
     );
+
+    // Automatically send SMS to all emergency contacts
+    sendSOSSMS(name);
+  };
+
+  const sendSOSSMS = (senderName: string) => {
+    const msgText = `🆘 EMERGENCY SOS from ${senderName}! I need immediate help. Please contact me or my guardian right away. - Sent via TinyBit`;
+    const encoded = encodeURIComponent(msgText);
+    // Build a list of recipients: profile contact + user-added contacts
+    const recipients: string[] = [];
+    if (profileContact?.phone) recipients.push(profileContact.phone);
+    contacts.forEach(c => { if (c.phone) recipients.push(c.phone); });
+    if (recipients.length === 0) return;
+    // Open SMS app for the first contact (SMS URI supports one recipient on most platforms)
+    const separator = Platform.OS === 'ios' ? '&' : '?';
+    Linking.openURL(`sms:${recipients[0]}${separator}body=${encoded}`).catch(() => {});
   };
 
   const handlePressIn = () => {
@@ -350,6 +381,31 @@ export default function SOSScreen() {
             <Text style={styles.sosInfoText}>
               {isCalled ? t.familyNotified : t.willCallBoth}
             </Text>
+
+            {/* Manual Call button — shown after SOS is triggered */}
+            {isCalled && (profileContact || contacts.length > 0) && (
+              <TouchableOpacity
+                style={styles.callNowBtn}
+                onPress={() => {
+                  const firstPhone = profileContact?.phone ?? contacts[0]?.phone;
+                  if (firstPhone) handleCall(firstPhone);
+                }}
+              >
+                <Ionicons name="call" size={20} color={C.white} style={{ marginRight: 8 }} />
+                <Text style={styles.callNowText}>Call Emergency Contact</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* SMS all contacts button */}
+            {isCalled && (
+              <TouchableOpacity
+                style={[styles.callNowBtn, { backgroundColor: "#2B7FC0", marginTop: 10 }]}
+                onPress={() => sendSOSSMS(profile?.fullName || profile?.firstName || 'User')}
+              >
+                <Ionicons name="chatbubble-outline" size={20} color={C.white} style={{ marginRight: 8 }} />
+                <Text style={styles.callNowText}>Send SMS Again</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Emergency Contacts Header */}
@@ -728,6 +784,22 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 30,
     paddingHorizontal: 20,
+  },
+  callNowBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.green,
+    borderRadius: 20,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    marginTop: 16,
+    marginHorizontal: 20,
+  },
+  callNowText: {
+    color: C.white,
+    fontSize: 15,
+    fontWeight: "800",
   },
 
   // ── Section headers ───────────────────────────────────────────

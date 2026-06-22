@@ -40,7 +40,8 @@ const C = {
   yellow:  "#F59E0B",
 };
 
-const TODAY_KEY = "daily_checkin_done_date_v2";
+const LAST_CHECKIN_KEY = "daily_checkin_last_ts_v3"; // ISO timestamp of last submission
+const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
 // ─── Mood data ─────────────────────────────────────────────────────────────────
 
@@ -289,10 +290,16 @@ export default function DailyHealthCheckinScreen() {
   const [activityLevel, setActivity]     = useState<string | null>(null);
   const [mealsToday,    setMeals]        = useState<string | null>(null);
   const [metricsOpen,   setMetricsOpen]  = useState(false);
+  const [bpMode,        setBpMode]        = useState<"numeric" | "quick">("numeric");
+  const [sugarMode,     setSugarMode]     = useState<"numeric" | "quick">("numeric");
+  const [bpQuick,       setBpQuick]       = useState<string | null>(null);
+  const [sugarQuick,    setSugarQuick]    = useState<string | null>(null);
 
   // UI
-  const [saving,      setSaving]      = useState(false);
-  const [alreadyDone, setAlreadyDone] = useState(false);
+  const [saving,        setSaving]        = useState(false);
+  const [cooldownLeft,  setCooldownLeft]  = useState(0); // ms remaining
+  const [showHistory,   setShowHistory]   = useState(false);
+  const [history,       setHistory]       = useState<any[]>([]);
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -304,16 +311,41 @@ export default function DailyHealthCheckinScreen() {
     [mood, sleepQuality, hadBreakfast, waterIntake, painLevel, activityLevel, mealsToday],
   );
 
+  // Check cooldown on mount and tick every 30s
   useEffect(() => {
-    AsyncStorage.getItem(TODAY_KEY).then(val => {
-      if (val === today) setAlreadyDone(true);
-    });
+    const checkCooldown = async () => {
+      const lastTs = await AsyncStorage.getItem(LAST_CHECKIN_KEY);
+      if (lastTs) {
+        const elapsed = Date.now() - parseInt(lastTs, 10);
+        const remaining = COOLDOWN_MS - elapsed;
+        setCooldownLeft(remaining > 0 ? remaining : 0);
+      }
+    };
+    checkCooldown();
+    const interval = setInterval(checkCooldown, 30_000);
+    return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load check-in history from Supabase
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("daily_check_ins")
+      .select("date, mood, mood_score, sleep_quality, pain_level, notes, completed_at")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(14)
+      .then(({ data }) => { if (data) setHistory(data); });
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
     if (!user) return;
+    if (cooldownLeft > 0) {
+      const mins = Math.ceil(cooldownLeft / 60_000);
+      return Alert.alert("Please wait", `You can check in again in ${mins} minute${mins !== 1 ? 's' : ''}.`);
+    }
     if (!mood) return Alert.alert("Mood required", "Please select how you are feeling today.");
     setSaving(true);
     try {
@@ -348,12 +380,26 @@ export default function DailyHealthCheckinScreen() {
           note:    `${bpSys}/${bpDia} mmHg`,
           logged_at: new Date().toISOString(),
         });
+      } else if (bpQuick) {
+        metricLogs.push({
+          user_id: user.id, type: "bp",
+          value:   { category: bpQuick },
+          note:    `BP: ${bpQuick}`,
+          logged_at: new Date().toISOString(),
+        });
       }
       if (bloodSugar) {
         metricLogs.push({
           user_id: user.id, type: "sugar",
           value:   { level: Number(bloodSugar) },
           note:    `${bloodSugar} mg/dL`,
+          logged_at: new Date().toISOString(),
+        });
+      } else if (sugarQuick) {
+        metricLogs.push({
+          user_id: user.id, type: "sugar",
+          value:   { category: sugarQuick },
+          note:    `Sugar: ${sugarQuick}`,
           logged_at: new Date().toISOString(),
         });
       }
@@ -397,7 +443,18 @@ export default function DailyHealthCheckinScreen() {
         `${name} — Mood: ${mood} · Health Score: ${score}/100`,
       );
 
-      await AsyncStorage.setItem(TODAY_KEY, today);
+      const nowTs = Date.now().toString();
+      await AsyncStorage.setItem(LAST_CHECKIN_KEY, nowTs);
+      setCooldownLeft(COOLDOWN_MS);
+
+      // Refresh history
+      const { data: newHistory } = await supabase
+        .from("daily_check_ins")
+        .select("date, mood, mood_score, sleep_quality, pain_level, notes, completed_at")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(14);
+      if (newHistory) setHistory(newHistory);
 
       Alert.alert(
         "🎉 Check-In Complete!",
@@ -422,33 +479,10 @@ export default function DailyHealthCheckinScreen() {
   const GAP    = 10;
   const moodW  = Math.floor((width - GUTTER - GAP * 2) / 3);
 
-  // ── Already-done view ───────────────────────────────────────────────────────
+  // ── Cooldown helper ─────────────────────────────────────────────────────────
 
-  if (alreadyDone) {
-    return (
-      <View style={[s.root, { backgroundColor: theme.bg }]}>
-        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        <LinearGradient colors={["#2B3C86", "#2E9CD6"]} style={[s.header, { paddingTop: insets.top + 12 }]}>
-          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")} style={s.backBtn}>
-            <Ionicons name="chevron-back" size={20} color={C.white} />
-          </Pressable>
-          <Text style={s.headerTitle}>Daily Health Check-In</Text>
-        </LinearGradient>
-        <View style={[s.sheet, { backgroundColor: theme.bg }]}>
-          <View style={s.doneBanner}>
-            <Ionicons name="checkmark-circle" size={76} color="#22C55E" />
-            <Text style={[s.doneTitle, { color: theme.text }]}>All Done Today! 🎉</Text>
-            <Text style={[s.doneSub, { color: theme.muted }]}>
-              You've already completed your daily check-in.{"\n"}Come back tomorrow to keep your streak going!
-            </Text>
-            <Pressable style={s.doneBtn} onPress={() => router.replace("/(tabs)")}>
-              <Text style={s.doneBtnTxt}>Back to Home</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    );
-  }
+  const cooldownMins = Math.ceil(cooldownLeft / 60_000);
+  const isCoolingDown = cooldownLeft > 0;
 
   // ── Main view ───────────────────────────────────────────────────────────────
 
@@ -643,24 +677,74 @@ export default function DailyHealthCheckinScreen() {
 
             {metricsOpen && (
               <View style={[s.card, { backgroundColor: theme.card }]}>
-                <MetricInputRow
-                  emoji="❤️"
-                  label="Blood Pressure"
-                  value={bpSys}  value2={bpDia}
-                  ph="120"       ph2="80"
-                  unit="mmHg"
-                  onChange={setBpSys}
-                  onChange2={setBpDia}
-                />
+                {/* Blood Pressure */}
+                <View style={mi.row}>
+                  <View style={mi.iconBox}><Text style={{ fontSize: 22 }}>❤️</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <Text style={mi.label}>Blood Pressure</Text>
+                      <TouchableOpacity onPress={() => setBpMode(m => m === "numeric" ? "quick" : "numeric")} style={s.modeToggle}>
+                        <Text style={s.modeToggleTxt}>{bpMode === "numeric" ? "Quick Select" : "Enter Numbers"}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {bpMode === "numeric" ? (
+                      <View style={mi.inputs}>
+                        <TextInput style={mi.input} value={bpSys} onChangeText={setBpSys} placeholder="120" keyboardType="numeric" placeholderTextColor="#B0BEC5" />
+                        <Text style={mi.slash}>/</Text>
+                        <TextInput style={mi.input} value={bpDia} onChangeText={setBpDia} placeholder="80" keyboardType="numeric" placeholderTextColor="#B0BEC5" />
+                        <Text style={mi.unit}>mmHg</Text>
+                      </View>
+                    ) : (
+                      <View style={sg.track}>
+                        {(["Low", "Normal", "Slightly High", "High"] as const).map(opt => (
+                          <TouchableOpacity
+                            key={opt}
+                            onPress={() => setBpQuick(opt)}
+                            style={[sg.seg, bpQuick === opt && { backgroundColor: C.accent }]}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={[sg.segTxt, bpQuick === opt && sg.segTxtActive]} numberOfLines={1}>{opt}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </View>
+
                 <View style={s.metDiv} />
-                <MetricInputRow
-                  emoji="🩸"
-                  label="Blood Sugar"
-                  value={bloodSugar}
-                  ph="110"
-                  unit="mg/dL"
-                  onChange={setBloodSugar}
-                />
+
+                {/* Blood Sugar */}
+                <View style={mi.row}>
+                  <View style={mi.iconBox}><Text style={{ fontSize: 22 }}>🩸</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <Text style={mi.label}>Blood Sugar</Text>
+                      <TouchableOpacity onPress={() => setSugarMode(m => m === "numeric" ? "quick" : "numeric")} style={s.modeToggle}>
+                        <Text style={s.modeToggleTxt}>{sugarMode === "numeric" ? "Quick Select" : "Enter Numbers"}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {sugarMode === "numeric" ? (
+                      <View style={mi.inputs}>
+                        <TextInput style={mi.input} value={bloodSugar} onChangeText={setBloodSugar} placeholder="110" keyboardType="numeric" placeholderTextColor="#B0BEC5" />
+                        <Text style={mi.unit}>mg/dL</Text>
+                      </View>
+                    ) : (
+                      <View style={sg.track}>
+                        {(["Low", "Normal", "Elevated", "High"] as const).map(opt => (
+                          <TouchableOpacity
+                            key={opt}
+                            onPress={() => setSugarQuick(opt)}
+                            style={[sg.seg, sugarQuick === opt && { backgroundColor: "#10B981" }]}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={[sg.segTxt, sugarQuick === opt && sg.segTxtActive]} numberOfLines={1}>{opt}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </View>
+
                 <View style={s.metDiv} />
                 <MetricInputRow
                   emoji="⚖️"
@@ -721,29 +805,82 @@ export default function DailyHealthCheckinScreen() {
           )}
 
           {/* ── 7. Complete CTA ───────────────────────────────────────────────── */}
-          <Pressable
-            onPress={handleSubmit}
-            disabled={saving || !mood}
-            style={[s.cta, (saving || !mood) && s.ctaDim]}
-          >
-            <LinearGradient
-              colors={saving || !mood ? ["#8A9BB0", "#8A9BB0"] : ["#1A2E6A", "#2563EB"]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={s.ctaGrad}
+          {isCoolingDown ? (
+            <View style={s.cooldownBanner}>
+              <Ionicons name="time-outline" size={28} color={C.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cooldownTitle, { color: theme.text }]}>Next check-in available in</Text>
+                <Text style={[s.cooldownTime, { color: C.accent }]}>
+                  {cooldownMins} minute{cooldownMins !== 1 ? 's' : ''}
+                </Text>
+                <Text style={[s.cooldownSub, { color: theme.muted }]}>Check-in is limited to once per hour.</Text>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              onPress={handleSubmit}
+              disabled={saving || !mood}
+              style={[s.cta, (saving || !mood) && s.ctaDim]}
             >
-              <Ionicons
-                name={saving ? "hourglass-outline" : "checkmark-done"}
-                size={24}
-                color={C.white}
-              />
-              <Text style={s.ctaTxt}>
-                {saving ? "Saving…" : "Complete Daily Check-In"}
-              </Text>
-            </LinearGradient>
-          </Pressable>
+              <LinearGradient
+                colors={saving || !mood ? ["#8A9BB0", "#8A9BB0"] : ["#1A2E6A", "#2563EB"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={s.ctaGrad}
+              >
+                <Ionicons
+                  name={saving ? "hourglass-outline" : "checkmark-done"}
+                  size={24}
+                  color={C.white}
+                />
+                <Text style={s.ctaTxt}>
+                  {saving ? "Saving…" : "Complete Daily Check-In"}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          )}
 
-          {!mood && (
+          {!mood && !isCoolingDown && (
             <Text style={s.hintTxt}>Select your mood above to enable check-in</Text>
+          )}
+
+          {/* ── 8. Check-In History ───────────────────────────────────────────── */}
+          {history.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(360).springify()}>
+              <Pressable style={s.metricsHdr} onPress={() => setShowHistory(p => !p)}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.metricsTitleTxt}>Check-In History</Text>
+                  <Text style={s.metricsSubTxt}>Last {history.length} entries</Text>
+                </View>
+                <View style={s.metricsChevron}>
+                  <Ionicons name={showHistory ? "chevron-up" : "chevron-down"} size={18} color={C.accent} />
+                </View>
+              </Pressable>
+
+              {showHistory && (
+                <View style={[s.card, { backgroundColor: theme.card }]}>
+                  {history.map((h, idx) => {
+                    const scoreMatch = (h.notes ?? "").match(/score:(\d+)/);
+                    const sc = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
+                    const scoreColor = sc == null ? C.muted : sc >= 80 ? C.green : sc >= 60 ? C.yellow : C.red;
+                    return (
+                      <View key={`${h.date}-${idx}`} style={[s.historyRow, idx < history.length - 1 && s.div]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.historyDate, { color: theme.muted }]}>{h.date}</Text>
+                          <Text style={[s.historyMood, { color: theme.text }]}>
+                            Mood: {h.mood ?? "—"}
+                            {h.sleep_quality ? ` · Sleep: ${h.sleep_quality}` : ""}
+                            {h.pain_level ? ` · Pain: ${h.pain_level}` : ""}
+                          </Text>
+                        </View>
+                        {sc != null && (
+                          <Text style={[s.historyScore, { color: scoreColor }]}>{sc}</Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </Animated.View>
           )}
 
         </ScrollView>
@@ -809,10 +946,30 @@ const s = StyleSheet.create({
   metricsSubTxt:   { fontSize: 13, fontWeight: "500", color: C.muted, marginTop: 3 },
   metricsChevron:  { width: 32, height: 32, borderRadius: 16, backgroundColor: "#E8F5FD", justifyContent: "center", alignItems: "center" },
 
+  // Mode toggle
+  modeToggle:    { backgroundColor: "#E8F5FD", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
+  modeToggleTxt: { fontSize: 11, fontWeight: "700", color: C.accent },
+
   // CTA
   cta:     { marginHorizontal: 16, marginBottom: 12, borderRadius: 20, overflow: "hidden", elevation: 4 },
   ctaDim:  { opacity: 0.65 },
   ctaGrad: { height: 64, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 },
   ctaTxt:  { color: C.white, fontSize: 17, fontWeight: "900" },
   hintTxt: { textAlign: "center", fontSize: 13, fontWeight: "500", color: C.muted, marginBottom: 10 },
+
+  // Cooldown
+  cooldownBanner: {
+    marginHorizontal: 16, marginBottom: 16, borderRadius: 18,
+    backgroundColor: "#EFF8FF", padding: 18, flexDirection: "row",
+    alignItems: "center", gap: 14, borderWidth: 1.5, borderColor: "#BFDBFE",
+  },
+  cooldownTitle: { fontSize: 14, fontWeight: "700", marginBottom: 2 },
+  cooldownTime:  { fontSize: 22, fontWeight: "900", marginBottom: 2 },
+  cooldownSub:   { fontSize: 12, fontWeight: "500" },
+
+  // History
+  historyRow:   { paddingVertical: 12, flexDirection: "row", alignItems: "center" },
+  historyDate:  { fontSize: 11, fontWeight: "600", marginBottom: 3 },
+  historyMood:  { fontSize: 13, fontWeight: "700" },
+  historyScore: { fontSize: 22, fontWeight: "900", marginLeft: 10, minWidth: 42, textAlign: "right" },
 });
