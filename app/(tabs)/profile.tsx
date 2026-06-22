@@ -383,7 +383,7 @@ function ElderProfileScreen() {
           <View style={s.itemDivider} />
 
           {/* Rate TinyBit */}
-          <Pressable style={s.rowItem} onPress={() => Linking.openURL('https://play.google.com/store/apps/details?id=t.i.n.y.b.i.t.E.C').catch(() => {})}>
+          <Pressable style={s.rowItem} onPress={() => Linking.openURL('https://play.google.com/store/apps/details?id=com.dd.tinybit').catch(() => {})}>
             <View style={s.iconCircle}><Ionicons name="star-outline" size={18} color={C.white} /></View>
             <View style={s.itemInfo}>
               <Text style={[s.itemTitle, { color: themeColors.text }]}>{t('rateTinyBit')}</Text>

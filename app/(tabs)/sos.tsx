@@ -185,23 +185,29 @@ export default function SOSScreen() {
     };
 
     if (editingIndex !== null && editingContact.id) {
-      // Update existing
       const { error } = await supabase
         .from('emergency_contacts')
         .update({ name: payload.name, role: payload.role, phone: payload.phone, color: payload.color })
         .eq('id', editingContact.id);
-      if (error) { Alert.alert('Error', 'Could not update contact.'); return; }
+      if (error) {
+        console.error('[SOS] update error:', error.code, error.message);
+        Alert.alert('Error', error.message || 'Could not update contact.');
+        return;
+      }
       const c = [...contacts];
       c[editingIndex] = { ...editingContact, phone: fullPhone, initials };
       setContacts(c);
     } else {
-      // Insert new
       const { data, error } = await supabase
         .from('emergency_contacts')
         .insert(payload)
         .select('id')
         .single();
-      if (error) { Alert.alert('Error', 'Could not save contact.'); return; }
+      if (error) {
+        console.error('[SOS] insert error:', error.code, error.message);
+        Alert.alert('Error', error.message || 'Could not save contact.');
+        return;
+      }
       setContacts([...contacts, { ...payload, id: data.id, initials }]);
     }
     setIsEditModalVisible(false);
