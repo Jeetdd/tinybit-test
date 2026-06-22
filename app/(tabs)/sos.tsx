@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -225,6 +225,8 @@ export default function SOSScreen() {
     setEditingIndex(null);
   };
 
+  const hapticIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Pulse rings animation
   const ring1Scale = useSharedValue(1);
   const progressPulse = useSharedValue(0);
@@ -248,6 +250,10 @@ export default function SOSScreen() {
     if (isCalled) return;
     setIsCalled(true);
     setIsActivating(false);
+    if (hapticIntervalRef.current) {
+      clearInterval(hapticIntervalRef.current);
+      hapticIntervalRef.current = null;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     if (!user?.id) return;
@@ -284,42 +290,50 @@ export default function SOSScreen() {
       }
     } catch {}
 
-    const bloodGroup = profile?.bloodGroup ? `Blood Group: ${profile.bloodGroup}` : "";
-    const conditions = (profile?.medicalConditions ?? []).length
-      ? `Medical Conditions: ${profile.medicalConditions!.join(', ')}`
-      : "";
+    const bloodGroup = profile?.bloodGroup ? `Blood: ${profile.bloodGroup}` : "";
+    const rawConditions = (profile?.medicalConditions ?? []).filter(
+      (c: string) => c && c.toLowerCase() !== 'none' && c.trim() !== ''
+    );
+    const conditions = rawConditions.length ? `Conditions: ${rawConditions.join(', ')}` : "";
 
-    const msgText = [
-      `🆘 EMERGENCY SOS ALERT`,
-      ``,
-      `Patient: ${senderName}`,
-      `Time: ${timeStr}, ${dateStr}`,
+    // Single-line pipe format — works reliably on both Android and iOS.
+    // Multi-line (\n → %0A) breaks in iOS Messages and some Android SMS apps.
+    const parts = [
+      `[SOS] ${senderName} needs IMMEDIATE HELP!`,
+      `Time: ${timeStr} ${dateStr}`,
       locationLine,
       bloodGroup,
       conditions,
-      ``,
-      `This person needs IMMEDIATE help. Please respond or call emergency services right away.`,
-      ``,
-      `— Sent via TinyBit Emergency App`,
-    ].filter(Boolean).join('\n');
+      `Call emergency services NOW. -TinyBit`,
+    ].filter(Boolean);
 
-    const encoded = encodeURIComponent(msgText);
+    const encoded = encodeURIComponent(parts.join(' | '));
     const recipients: string[] = [];
     if (profileContact?.phone) recipients.push(profileContact.phone);
     contacts.forEach(c => { if (c.phone) recipients.push(c.phone); });
     if (recipients.length === 0) return;
-    const separator = Platform.OS === 'ios' ? '&' : '?';
-    Linking.openURL(`sms:${recipients[0]}${separator}body=${encoded}`).catch(() => {});
+
+    // ?body= is RFC-compliant and works on both iOS and Android.
+    // iOS was previously using &body= which fails on modern iOS versions.
+    Linking.openURL(`sms:${recipients[0]}?body=${encoded}`).catch(() => {});
   };
 
   const handlePressIn = () => {
     if (isCalled) return;
     setIsActivating(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     progressPulse.value = withTiming(1, { duration: 3000 });
+    // Immediate heavy thud, then tick every 600 ms while holding
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    hapticIntervalRef.current = setInterval(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }, 600);
   };
 
   const handlePressOut = () => {
+    if (hapticIntervalRef.current) {
+      clearInterval(hapticIntervalRef.current);
+      hapticIntervalRef.current = null;
+    }
     if (!isCalled) {
       progressPulse.value = withTiming(0, { duration: 300 });
       setIsActivating(false);
