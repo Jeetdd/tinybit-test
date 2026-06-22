@@ -10,7 +10,7 @@
       "channel": "development",
       "node": "20.18.0",
       "cache": {
-        "key": "dev-v3"
+        "key": "dev-v4"
       },
       "env": {
         "npm_config_legacy_peer_deps": "true",
@@ -25,7 +25,7 @@
       },
       "node": "20.18.0",
       "cache": {
-        "key": "preview-v3"
+        "key": "preview-v4"
       },
       "env": {
         "npm_config_legacy_peer_deps": "true",
@@ -39,7 +39,7 @@
       "autoIncrement": true,
       "node": "20.18.0",
       "cache": {
-        "key": "prod-v3"
+        "key": "prod-v4"
       },
       "env": {
         "npm_config_legacy_peer_deps": "true",
