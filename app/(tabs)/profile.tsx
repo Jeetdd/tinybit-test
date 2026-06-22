@@ -81,7 +81,7 @@ function ElderProfileScreen() {
   };
 
   const callNumber = (num: string) => {
-    Linking.openURL(`tel:${num}`).catch(err => Alert.alert("Error", "Could not place call"));
+    Linking.openURL(`tel:${num}`).catch(() => Alert.alert("Error", "Could not place call"));
   };
 
   return (
@@ -265,34 +265,8 @@ function ElderProfileScreen() {
             <Ionicons name="chevron-forward" size={16} color={C.muted} />
           </TouchableOpacity>
 
-          {/* Emergency contact */}
-          {profile?.emergencyPhone ? (
-            <>
-              <View style={s.itemDivider} />
-              <View style={s.rowItem}>
-                <TouchableOpacity style={s.iconCircle} onPress={() => callNumber(profile.emergencyPhone!)}>
-                  <Ionicons name="call" size={18} color={C.white} />
-                </TouchableOpacity>
-                <View style={s.itemInfo}>
-                  <Text style={[s.itemTitle, { color: themeColors.text }]}>{t('emergencyContact')}</Text>
-                  <Text style={[s.itemSub, { color: themeColors.muted }]}>
-                    {profile.emergencyPhone}{profile.emergencyName ? ` · ${profile.emergencyName}` : ""}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => router.push({ pathname: "/edit-profile", params: { healthOnly: '1' } } as any)}>
-                  <Ionicons name="pencil" size={16} color={C.blue} />
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-             <TouchableOpacity style={[s.rowItem, { paddingVertical: 12 }]} onPress={() => router.push({ pathname: "/edit-profile", params: { healthOnly: '1' } } as any)}>
-                <View style={s.iconCircle}><Ionicons name="add" size={22} color={C.white} /></View>
-                <Text style={[s.itemTitle, { color: themeColors.text }]}>Add Emergency Contact</Text>
-             </TouchableOpacity>
-          )}
-
           {/* Placeholder when nothing is saved yet */}
-          {!profile?.height && !profile?.bloodGroup && (profile?.medicalConditions?.length ?? 0) === 0 && !profile?.doctorName && !profile?.emergencyPhone && (
+          {!profile?.height && !profile?.bloodGroup && (profile?.medicalConditions?.length ?? 0) === 0 && !profile?.doctorName && (
             <Text style={[s.itemSub, { textAlign: "center", paddingVertical: 8 }]}>
               {t('noHealthInfo')}
             </Text>
@@ -642,7 +616,7 @@ const RAW_STYLES = StyleSheet.create({
   statLabel: { fontSize: 11, fontWeight: "600", color: '#A3B1C6', marginTop: 6 },
   statDivider: { width: 1, height: 28, backgroundColor: '#E6EBF2' },
 
-  sectionHeaderRow: { marginHorizontal: 16, marginTop: 24, marginBottom: 12 },
+  sectionHeaderRow: { marginHorizontal: 16, marginTop: 24, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { fontSize: 18, fontWeight: "900", color: C.text },
 
 

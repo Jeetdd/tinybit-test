@@ -23,6 +23,12 @@ export async function signInWithGoogle(): Promise<{ user: User } | null> {
   });
   if (error) { console.error('[OAuth] signInWithOAuth error:', error.message); throw error; }
   if (!data.url) throw new Error('[OAuth] No URL returned from Supabase');
+  console.log('[OAuth] Supabase authorize URL:', data.url);
+  try {
+    const parsed = new URL(data.url);
+    const rt = parsed.searchParams.get('redirect_to');
+    console.log('[OAuth] redirect_to param:', rt);
+  } catch {}
   console.log('[OAuth] Opening browser...');
 
   // ── iOS ──────────────────────────────────────────────────────────────────
