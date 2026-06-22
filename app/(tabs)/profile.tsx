@@ -190,6 +190,9 @@ function ElderProfileScreen() {
         {/* ── My Health Info ── */}
         <View style={s.sectionHeaderRow}>
           <Text style={[s.sectionTitle, { color: themeColors.text }]}>{t('myHealthInfo')}</Text>
+          <TouchableOpacity onPress={() => router.push({ pathname: "/edit-profile", params: { healthOnly: '1' } } as any)}>
+            <Ionicons name="pencil-outline" size={18} color={C.blue} />
+          </TouchableOpacity>
         </View>
         <View style={[s.card, { backgroundColor: themeColors.card }]}>
           {/* Body metrics */}
@@ -276,13 +279,13 @@ function ElderProfileScreen() {
                     {profile.emergencyPhone}{profile.emergencyName ? ` · ${profile.emergencyName}` : ""}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => router.push("/edit-profile")}>
+                <TouchableOpacity onPress={() => router.push({ pathname: "/edit-profile", params: { healthOnly: '1' } } as any)}>
                   <Ionicons name="pencil" size={16} color={C.blue} />
                 </TouchableOpacity>
               </View>
             </>
           ) : (
-             <TouchableOpacity style={[s.rowItem, { paddingVertical: 12 }]} onPress={() => router.push("/edit-profile")}>
+             <TouchableOpacity style={[s.rowItem, { paddingVertical: 12 }]} onPress={() => router.push({ pathname: "/edit-profile", params: { healthOnly: '1' } } as any)}>
                 <View style={s.iconCircle}><Ionicons name="add" size={22} color={C.white} /></View>
                 <Text style={[s.itemTitle, { color: themeColors.text }]}>Add Emergency Contact</Text>
              </TouchableOpacity>

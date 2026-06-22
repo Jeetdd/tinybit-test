@@ -30,9 +30,10 @@ export default function EditProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
 
   // Optional params: when a Guardian navigates here to edit an Elder's profile
-  const { targetUserId, targetName } = useLocalSearchParams<{ targetUserId?: string; targetName?: string }>();
+  const { targetUserId, targetName, healthOnly } = useLocalSearchParams<{ targetUserId?: string; targetName?: string; healthOnly?: string }>();
   const isEditingElder = !!targetUserId && targetUserId !== user?.id;
   const editingId = isEditingElder ? targetUserId : user?.id;
+  const isHealthOnly = healthOnly === '1';
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEditingElder);
@@ -152,9 +153,11 @@ export default function EditProfileScreen() {
     }
   };
 
-  const displayName = isEditingElder
-    ? (targetName ? `Edit ${targetName}'s Profile` : "Edit Elder's Profile")
-    : "Edit Profile";
+  const displayName = isHealthOnly
+    ? "Edit Health Info"
+    : isEditingElder
+      ? (targetName ? `Edit ${targetName}'s Profile` : "Edit Elder's Profile")
+      : "Edit Profile";
 
   return (
     <View style={s.container}>
@@ -180,58 +183,65 @@ export default function EditProfileScreen() {
       ) : (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
-            <View style={s.avatarSection}>
-              <Pressable onPress={pickImage} style={s.avatarContainer}>
-                <Image
-                  source={{ uri: avatar || `https://api.dicebear.com/7.x/adventurer/png?seed=${name || 'User'}&backgroundColor=b6e3f4` }}
-                  style={s.avatar}
-                />
-                <View style={s.editIcon}><Ionicons name="camera" size={16} color={C.white} /></View>
-              </Pressable>
-              <Text style={s.avatarHint}>Tap to change photo</Text>
-            </View>
+            {!isHealthOnly && (
+              <View style={s.avatarSection}>
+                <Pressable onPress={pickImage} style={s.avatarContainer}>
+                  <Image
+                    source={{ uri: avatar || `https://api.dicebear.com/7.x/adventurer/png?seed=${name || 'User'}&backgroundColor=b6e3f4` }}
+                    style={s.avatar}
+                  />
+                  <View style={s.editIcon}><Ionicons name="camera" size={16} color={C.white} /></View>
+                </Pressable>
+                <Text style={s.avatarHint}>Tap to change photo</Text>
+              </View>
+            )}
 
             <View style={s.form}>
-              <Label>Full Name</Label>
-              <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Enter full name" />
+              {!isHealthOnly && (
+                <>
+                  <Label>Full Name</Label>
+                  <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Enter full name" />
 
-              <Label>Mobile Number</Label>
-              <TextInput style={s.input} value={mobile} onChangeText={setMobile} placeholder="Enter mobile number" keyboardType="phone-pad" />
+                  <Label>Mobile Number</Label>
+                  <TextInput style={s.input} value={mobile} onChangeText={setMobile} placeholder="Enter mobile number" keyboardType="phone-pad" />
 
-              <View style={s.row}>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Label>Age</Label>
-                  <TextInput style={s.input} value={age} onChangeText={setAge} placeholder="Age" keyboardType="number-pad" />
-                </View>
-                <View style={{ width: 16 }} />
-                <View style={{ flex: 2, gap: 6 }}>
-                  <Label>Gender</Label>
-                  <View style={s.genderRow}>
-                    {['male', 'female'].map(g => (
-                      <Pressable key={g} onPress={() => setGender(g)} style={[s.genderBtn, gender === g && s.genderBtnActive]}>
-                        <Text style={[s.genderText, gender === g && s.genderTextActive]}>{g.charAt(0).toUpperCase() + g.slice(1)}</Text>
-                      </Pressable>
-                    ))}
+                  <View style={s.row}>
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Label>Age</Label>
+                      <TextInput style={s.input} value={age} onChangeText={setAge} placeholder="Age" keyboardType="number-pad" />
+                    </View>
+                    <View style={{ width: 16 }} />
+                    <View style={{ flex: 2, gap: 6 }}>
+                      <Label>Gender</Label>
+                      <View style={s.genderRow}>
+                        {['male', 'female'].map(g => (
+                          <Pressable key={g} onPress={() => setGender(g)} style={[s.genderBtn, gender === g && s.genderBtnActive]}>
+                            <Text style={[s.genderText, gender === g && s.genderTextActive]}>{g.charAt(0).toUpperCase() + g.slice(1)}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
                   </View>
-                </View>
-              </View>
 
-              <Label>Location</Label>
-              <TextInput style={s.input} value={location} onChangeText={setLocation} placeholder="e.g. Vadodara, Gujarat" />
+                  <Label>Location</Label>
+                  <TextInput style={s.input} value={location} onChangeText={setLocation} placeholder="e.g. Vadodara, Gujarat" />
 
-              <Label>Email Address</Label>
-              <TextInput style={s.input} value={email} onChangeText={setEmail} placeholder="Enter email" keyboardType="email-address" autoCapitalize="none" />
+                  <Label>Email Address</Label>
+                  <TextInput style={s.input} value={email} onChangeText={setEmail} placeholder="Enter email" keyboardType="email-address" autoCapitalize="none" />
 
-              <View style={s.divider} />
-              <Text style={s.secTitle}>Emergency Contact</Text>
+                  <View style={s.divider} />
+                  <Text style={s.secTitle}>Emergency Contact</Text>
 
-              <Label>Contact Name</Label>
-              <TextInput style={s.input} value={emergencyName} onChangeText={setEmergencyName} placeholder="Name" />
+                  <Label>Contact Name</Label>
+                  <TextInput style={s.input} value={emergencyName} onChangeText={setEmergencyName} placeholder="Name" />
 
-              <Label>Contact Number</Label>
-              <TextInput style={s.input} value={emergencyPhone} onChangeText={setEmergencyPhone} placeholder="Phone number" keyboardType="phone-pad" />
+                  <Label>Contact Number</Label>
+                  <TextInput style={s.input} value={emergencyPhone} onChangeText={setEmergencyPhone} placeholder="Phone number" keyboardType="phone-pad" />
 
-              <View style={s.divider} />
+                  <View style={s.divider} />
+                </>
+              )}
+
               <Text style={s.secTitle}>Health Information</Text>
 
               <View style={s.row}>
@@ -281,6 +291,19 @@ export default function EditProfileScreen() {
 
               <Label>Doctor's Contact</Label>
               <TextInput style={s.input} value={doctorContact} onChangeText={setDoctorContact} placeholder="Phone or clinic number" keyboardType="phone-pad" />
+
+              {isHealthOnly && (
+                <>
+                  <View style={s.divider} />
+                  <Text style={s.secTitle}>Emergency Contact</Text>
+
+                  <Label>Contact Name</Label>
+                  <TextInput style={s.input} value={emergencyName} onChangeText={setEmergencyName} placeholder="e.g. Son, Daughter, Spouse" />
+
+                  <Label>Contact Phone</Label>
+                  <TextInput style={s.input} value={emergencyPhone} onChangeText={setEmergencyPhone} placeholder="Phone number" keyboardType="phone-pad" />
+                </>
+              )}
 
               <Pressable onPress={handleSave} disabled={loading} style={[s.saveBtn, loading && { opacity: 0.7 }]}>
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>Save Changes</Text>}

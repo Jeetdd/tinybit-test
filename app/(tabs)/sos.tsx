@@ -28,6 +28,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { tr } from "../../constants/appTranslations";
@@ -268,15 +269,45 @@ export default function SOSScreen() {
     sendSOSSMS(name);
   };
 
-  const sendSOSSMS = (senderName: string) => {
-    const msgText = `🆘 EMERGENCY SOS from ${senderName}! I need immediate help. Please contact me or my guardian right away. - Sent via TinyBit`;
+  const sendSOSSMS = async (senderName: string) => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = now.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+
+    let locationLine = "Location: Unable to retrieve";
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const { latitude, longitude } = loc.coords;
+        locationLine = `Location: https://maps.google.com/?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+      }
+    } catch {}
+
+    const bloodGroup = profile?.bloodGroup ? `Blood Group: ${profile.bloodGroup}` : "";
+    const conditions = (profile?.medicalConditions ?? []).length
+      ? `Medical Conditions: ${profile.medicalConditions!.join(', ')}`
+      : "";
+
+    const msgText = [
+      `🆘 EMERGENCY SOS ALERT`,
+      ``,
+      `Patient: ${senderName}`,
+      `Time: ${timeStr}, ${dateStr}`,
+      locationLine,
+      bloodGroup,
+      conditions,
+      ``,
+      `This person needs IMMEDIATE help. Please respond or call emergency services right away.`,
+      ``,
+      `— Sent via TinyBit Emergency App`,
+    ].filter(Boolean).join('\n');
+
     const encoded = encodeURIComponent(msgText);
-    // Build a list of recipients: profile contact + user-added contacts
     const recipients: string[] = [];
     if (profileContact?.phone) recipients.push(profileContact.phone);
     contacts.forEach(c => { if (c.phone) recipients.push(c.phone); });
     if (recipients.length === 0) return;
-    // Open SMS app for the first contact (SMS URI supports one recipient on most platforms)
     const separator = Platform.OS === 'ios' ? '&' : '?';
     Linking.openURL(`sms:${recipients[0]}${separator}body=${encoded}`).catch(() => {});
   };

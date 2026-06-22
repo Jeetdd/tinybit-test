@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput, Pressable,
-  StatusBar, KeyboardAvoidingView, Platform, Image, Alert,
+  StatusBar, KeyboardAvoidingView, Platform, Image, Alert, Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -136,7 +136,17 @@ export default function TinyAIScreen() {
   const [messages,    setMessages]    = useState<Message[]>([]);
   const [isTyping,    setIsTyping]    = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [kbOpen,      setKbOpen]      = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => {
+      setKbOpen(true);
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbOpen(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   useEffect(() => {
@@ -346,34 +356,58 @@ export default function TinyAIScreen() {
         </Pressable>
       </LinearGradient>
 
-      <ScrollView
-        ref={scrollViewRef}
-        contentContainerStyle={[s.chatScroll, { paddingBottom: TAB_BAR_HEIGHT + 100 }]}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-        onLayout={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
       >
-        {messages.map((msg, index) =>
-          msg.sender === "user" ? (
-            <Animated.View key={msg.id} entering={FadeInDown.delay(index * 40)} style={s.userRow}>
-              <View style={s.userBubbleWrap}>
-                <LinearGradient
-                  colors={["#1B3A5C", "#2B7FC0"]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={s.userBubble}
-                >
-                  <Text style={s.userText}>{msg.text}</Text>
-                </LinearGradient>
-                <Text style={[s.timeText, { color: themeColors.muted }]}>{msg.time}</Text>
-              </View>
-              <View style={s.userAvatar}>
-                <Ionicons name="person" size={17} color={C.white} />
-              </View>
-            </Animated.View>
-          ) : (
-            <Animated.View key={msg.id} entering={FadeInDown.delay(index * 40)} style={s.aiRow}>
+        <ScrollView
+          ref={scrollViewRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={[s.chatScroll, { paddingBottom: 16 }]}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          {messages.map((msg, index) =>
+            msg.sender === "user" ? (
+              <Animated.View key={msg.id} entering={FadeInDown.delay(index * 40)} style={s.userRow}>
+                <View style={s.userBubbleWrap}>
+                  <LinearGradient
+                    colors={["#1B3A5C", "#2B7FC0"]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={s.userBubble}
+                  >
+                    <Text style={s.userText}>{msg.text}</Text>
+                  </LinearGradient>
+                  <Text style={[s.timeText, { color: themeColors.muted }]}>{msg.time}</Text>
+                </View>
+                <View style={s.userAvatar}>
+                  <Ionicons name="person" size={17} color={C.white} />
+                </View>
+              </Animated.View>
+            ) : (
+              <Animated.View key={msg.id} entering={FadeInDown.delay(index * 40)} style={s.aiRow}>
+                <View style={s.aiAvatarCircle}>
+                  <Image
+                    source={require("../../assets/images/Group 427320054.png")}
+                    style={s.aiAvatarImg}
+                    resizeMode="contain"
+                  />
+                </View>
+                <View style={s.aiBubbleWrap}>
+                  <View style={[s.aiBubble, { backgroundColor: themeColors.card }]}>
+                    <Text style={[s.aiText, { color: themeColors.text }]}>{msg.text}</Text>
+                  </View>
+                  <Text style={[s.timeText, { color: themeColors.muted }]}>{msg.time}</Text>
+                </View>
+              </Animated.View>
+            )
+          )}
+
+          {isTyping && (
+            <View style={s.aiRow}>
               <View style={s.aiAvatarCircle}>
                 <Image
                   source={require("../../assets/images/Group 427320054.png")}
@@ -381,40 +415,18 @@ export default function TinyAIScreen() {
                   resizeMode="contain"
                 />
               </View>
-              <View style={s.aiBubbleWrap}>
-                <View style={[s.aiBubble, { backgroundColor: themeColors.card }]}>
-                  <Text style={[s.aiText, { color: themeColors.text }]}>{msg.text}</Text>
-                </View>
-                <Text style={[s.timeText, { color: themeColors.muted }]}>{msg.time}</Text>
+              <View style={[s.aiBubble, { backgroundColor: themeColors.card }]}>
+                <Text style={[s.aiText, { fontStyle: "italic", color: themeColors.muted }]}>
+                  {at.sathiIsThinking}
+                </Text>
               </View>
-            </Animated.View>
-          )
-        )}
-
-        {isTyping && (
-          <View style={s.aiRow}>
-            <View style={s.aiAvatarCircle}>
-              <Image
-                source={require("../../assets/images/Group 427320054.png")}
-                style={s.aiAvatarImg}
-                resizeMode="contain"
-              />
             </View>
-            <View style={[s.aiBubble, { backgroundColor: themeColors.card }]}>
-              <Text style={[s.aiText, { fontStyle: "italic", color: themeColors.muted }]}>
-                {at.sathiIsThinking}
-              </Text>
-            </View>
-          </View>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.bottom + TAB_BAR_HEIGHT + 8 : 0}
-        style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + TAB_BAR_HEIGHT }}
-      >
-        <View style={[s.chatInputArea, { paddingBottom: 8 }]}>
+        <View style={[s.chatInputArea, {
+          paddingBottom: kbOpen ? 8 : insets.bottom + TAB_BAR_HEIGHT + 8,
+        }]}>
           {inputBar}
         </View>
       </KeyboardAvoidingView>
