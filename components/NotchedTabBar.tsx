@@ -7,7 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
-import { LucideHome, LucideJournal, LucidePill, LucideUser } from './ui/lucide';
 
 const BAR_HEIGHT   = 60;   // tab bar visible height
 const CORNER_R     = 24;   // outer corner radius
@@ -42,15 +41,16 @@ function getLabel(title: unknown, route: string) {
   return route.charAt(0).toUpperCase() + route.slice(1);
 }
 
-function TabIcon({ route, color }: { route: string; color: string }) {
-  const s = 22;
-  switch (route) {
-    case 'index':    return <LucideHome    color={color} size={s} />;
-    case 'medicine': return <LucidePill    color={color} size={s} />;
-    case 'journal':  return <LucideJournal color={color} size={s} />;
-    case 'profile':  return <LucideUser    color={color} size={s} />;
-    default:         return <LucideHome    color={color} size={s} />;
-  }
+const TAB_ICONS: Record<string, [string, string]> = {
+  index:    ['home-outline',   'home'],
+  medicine: ['medkit-outline', 'medkit'],
+  journal:  ['book-outline',   'book'],
+  profile:  ['person-outline', 'person'],
+};
+
+function TabIcon({ route, color, isFocused }: { route: string; color: string; isFocused: boolean }) {
+  const [outline, filled] = TAB_ICONS[route] ?? ['home-outline', 'home'];
+  return <Ionicons name={(isFocused ? filled : outline) as any} size={22} color={color} />;
 }
 
 const GUARDIAN_TABS = [
@@ -228,7 +228,7 @@ export function NotchedTabBar({ state, descriptors, navigation }: BottomTabBarPr
               ) : (
                 /* ── Regular tab ── */
                 <View style={styles.tabWrap}>
-                  <TabIcon route={route.name} color={color} />
+                  <TabIcon route={route.name} color={color} isFocused={isFocused} />
                   <Text
                     style={[styles.label, { color }, isFocused && styles.labelActive]}
                     numberOfLines={1}

@@ -97,8 +97,25 @@ export async function signInWithGoogle(): Promise<{ user: User } | null> {
   return null;
 }
 
+// Apple only returns the user's name on the very first sign-in per device.
+// We stash it here so AuthContext.fetchProfile can read it synchronously
+// (before the SIGNED_IN event's fetchProfile DB query completes).
+let _pendingAppleName: { firstName: string; lastName: string; fullName: string } | null = null;
+
+export function consumePendingAppleName() {
+  const v = _pendingAppleName;
+  _pendingAppleName = null;
+  return v;
+}
+
+// Read without clearing — use in navigateAfterSocialAuth before fetchProfile clears it.
+export function peekPendingAppleName() {
+  return _pendingAppleName;
+}
+
 export async function signInWithApple(): Promise<{ user: User } | null> {
   console.log('[OAuth] Starting Apple sign-in...');
+  _pendingAppleName = null; // clear any stale value from a previous attempt
 
   const credential = await AppleAuthentication.signInAsync({
     requestedScopes: [
@@ -109,12 +126,33 @@ export async function signInWithApple(): Promise<{ user: User } | null> {
 
   if (!credential.identityToken) throw new Error('Apple sign-in failed: no identity token');
 
+  // Capture name BEFORE signInWithIdToken so AuthContext.fetchProfile
+  // sees it when the SIGNED_IN event fires (Apple gives it only once).
+  const givenName  = credential.fullName?.givenName?.trim()  ?? '';
+  const familyName = credential.fullName?.familyName?.trim() ?? '';
+  const fullName   = [givenName, familyName].filter(Boolean).join(' ');
+  if (fullName) {
+    _pendingAppleName = { firstName: givenName, lastName: familyName, fullName };
+  }
+
   const { data, error } = await supabase.auth.signInWithIdToken({
     provider: 'apple',
     token: credential.identityToken,
   });
 
-  if (error) { console.error('[OAuth] Apple signInWithIdToken error:', error.message); throw error; }
+  if (error) {
+    _pendingAppleName = null;
+    console.error('[OAuth] Apple signInWithIdToken error:', error.message);
+    throw error;
+  }
+
+  // Persist the name into Supabase user_metadata so future sign-ins
+  // (where Apple no longer sends the name) can still derive it.
+  if (fullName && data.user) {
+    supabase.auth.updateUser({
+      data: { given_name: givenName, family_name: familyName, full_name: fullName },
+    }).catch(() => {});
+  }
 
   console.log('[OAuth] Apple done. user:', data.user?.email);
   return data.user ? { user: data.user } : null;

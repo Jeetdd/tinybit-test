@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { signInWithGoogle, signInWithApple } from '../../services/oauth';
+import { signInWithGoogle, signInWithApple, peekPendingAppleName } from '../../services/oauth';
 import { deriveNamesFromUser } from '../../utils/profileName';
 import { supabase } from '../../utils/supabase';
 import CountryPickerModal from '../../components/CountryPickerModal';
@@ -61,9 +61,12 @@ export default function SignupScreen() {
     }
 
     const names = deriveNamesFromUser(authUser);
+    const appleName = peekPendingAppleName();
+    const firstName = names.firstName || appleName?.firstName || '';
+    const lastName  = names.lastName  || appleName?.lastName  || '';
     router.replace({
       pathname: '/onboarding/role' as any,
-      params: { firstName: names.firstName, lastName: names.lastName, email: authUser.email ?? '' },
+      params: { firstName, lastName, email: authUser.email ?? '' },
     });
   };
 

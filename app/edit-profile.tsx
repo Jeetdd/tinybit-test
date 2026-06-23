@@ -106,7 +106,7 @@ export default function EditProfileScreen() {
         ? medicationsText.split(',').map(s => ({ name: s.trim() })).filter(m => m.name)
         : [];
 
-      const { error } = await supabase.from('profiles').update({
+      const baseUpdate: Record<string, any> = {
         full_name: name,
         mobile: mobile,
         age: parseInt(age) || null,
@@ -116,14 +116,20 @@ export default function EditProfileScreen() {
         emergency_phone: emergencyPhone,
         emergency_name: emergencyName,
         profile_image: avatar,
-        height: height || null,
-        weight: weight || null,
-        blood_group: bloodGroup || null,
-        medical_conditions: parsedConditions.length ? parsedConditions : null,
-        medications: parsedMedications.length ? parsedMedications : null,
-        doctor_name: doctorName || null,
-        doctor_contact: doctorContact || null,
-      }).eq('id', editingId);
+      };
+
+      // Only overwrite health/doctor fields when the user can actually edit them
+      if (isEditingElder || isHealthOnly) {
+        baseUpdate.height = height || null;
+        baseUpdate.weight = weight || null;
+        baseUpdate.blood_group = bloodGroup || null;
+        baseUpdate.medical_conditions = parsedConditions.length ? parsedConditions : null;
+        baseUpdate.medications = parsedMedications.length ? parsedMedications : null;
+        baseUpdate.doctor_name = doctorName || null;
+        baseUpdate.doctor_contact = doctorContact || null;
+      }
+
+      const { error } = await supabase.from('profiles').update(baseUpdate).eq('id', editingId);
 
       if (error) throw error;
 
@@ -186,13 +192,16 @@ export default function EditProfileScreen() {
             {!isHealthOnly && (
               <View style={s.avatarSection}>
                 <Pressable onPress={pickImage} style={s.avatarContainer}>
-                  <Image
-                    source={{ uri: avatar || `https://api.dicebear.com/7.x/adventurer/png?seed=${name || 'User'}&backgroundColor=b6e3f4` }}
-                    style={s.avatar}
-                  />
-                  <View style={s.editIcon}><Ionicons name="camera" size={16} color={C.white} /></View>
+                  {avatar ? (
+                    <Image source={{ uri: avatar }} style={s.avatar} />
+                  ) : (
+                    <View style={[s.avatar, s.avatarPlaceholder]}>
+                      <Ionicons name="camera" size={28} color="#A0AEC0" />
+                    </View>
+                  )}
+                  {avatar && <View style={s.editIcon}><Ionicons name="camera" size={16} color={C.white} /></View>}
                 </Pressable>
-                <Text style={s.avatarHint}>Tap to change photo</Text>
+                <Text style={s.avatarHint}>{avatar ? 'Tap to change photo' : 'Tap to add photo'}</Text>
               </View>
             )}
 
@@ -242,55 +251,60 @@ export default function EditProfileScreen() {
                 </>
               )}
 
-              <Text style={s.secTitle}>Health Information</Text>
+              {/* Health & Doctor sections: only for guardian editing elder or health-only mode */}
+              {(isEditingElder || isHealthOnly) && (
+                <>
+                  <Text style={s.secTitle}>Health Information</Text>
 
-              <View style={s.row}>
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Label>Height (cm)</Label>
-                  <TextInput style={s.input} value={height} onChangeText={setHeight} placeholder="e.g. 165" keyboardType="numeric" />
-                </View>
-                <View style={{ width: 16 }} />
-                <View style={{ flex: 1, gap: 6 }}>
-                  <Label>Weight (kg)</Label>
-                  <TextInput style={s.input} value={weight} onChangeText={setWeight} placeholder="e.g. 68" keyboardType="numeric" />
-                </View>
-              </View>
+                  <View style={s.row}>
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Label>Height (cm)</Label>
+                      <TextInput style={s.input} value={height} onChangeText={setHeight} placeholder="e.g. 165" keyboardType="numeric" />
+                    </View>
+                    <View style={{ width: 16 }} />
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Label>Weight (kg)</Label>
+                      <TextInput style={s.input} value={weight} onChangeText={setWeight} placeholder="e.g. 68" keyboardType="numeric" />
+                    </View>
+                  </View>
 
-              <Label>Blood Group</Label>
-              <View style={s.genderRow}>
-                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
-                  <Pressable key={bg} onPress={() => setBloodGroup(bg)} style={[s.chipBtn, bloodGroup === bg && s.chipBtnActive]}>
-                    <Text style={[s.chipText, bloodGroup === bg && s.chipTextActive]}>{bg}</Text>
-                  </Pressable>
-                ))}
-              </View>
+                  <Label>Blood Group</Label>
+                  <View style={s.genderRow}>
+                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                      <Pressable key={bg} onPress={() => setBloodGroup(bg)} style={[s.chipBtn, bloodGroup === bg && s.chipBtnActive]}>
+                        <Text style={[s.chipText, bloodGroup === bg && s.chipTextActive]}>{bg}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
 
-              <Label>Medical Conditions</Label>
-              <TextInput
-                style={[s.input, { minHeight: 60 }]}
-                value={conditionsText}
-                onChangeText={setConditionsText}
-                placeholder="e.g. Diabetes, Hypertension (comma separated)"
-                multiline
-              />
+                  <Label>Medical Conditions</Label>
+                  <TextInput
+                    style={[s.input, { minHeight: 60 }]}
+                    value={conditionsText}
+                    onChangeText={setConditionsText}
+                    placeholder="e.g. Diabetes, Hypertension (comma separated)"
+                    multiline
+                  />
 
-              <Label>Current Medications</Label>
-              <TextInput
-                style={[s.input, { minHeight: 60 }]}
-                value={medicationsText}
-                onChangeText={setMedicationsText}
-                placeholder="e.g. Metformin 500mg, Amlodipine 5mg (comma separated)"
-                multiline
-              />
+                  <Label>Current Medications</Label>
+                  <TextInput
+                    style={[s.input, { minHeight: 60 }]}
+                    value={medicationsText}
+                    onChangeText={setMedicationsText}
+                    placeholder="e.g. Metformin 500mg, Amlodipine 5mg (comma separated)"
+                    multiline
+                  />
 
-              <View style={s.divider} />
-              <Text style={s.secTitle}>Doctor Information</Text>
+                  <View style={s.divider} />
+                  <Text style={s.secTitle}>Doctor Information</Text>
 
-              <Label>Doctor's Name</Label>
-              <TextInput style={s.input} value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Name" />
+                  <Label>Doctor's Name</Label>
+                  <TextInput style={s.input} value={doctorName} onChangeText={setDoctorName} placeholder="Dr. Name" />
 
-              <Label>Doctor's Contact</Label>
-              <TextInput style={s.input} value={doctorContact} onChangeText={setDoctorContact} placeholder="Phone or clinic number" keyboardType="phone-pad" />
+                  <Label>Doctor's Contact</Label>
+                  <TextInput style={s.input} value={doctorContact} onChangeText={setDoctorContact} placeholder="Phone or clinic number" keyboardType="phone-pad" />
+                </>
+              )}
 
               {isHealthOnly && (
                 <>
@@ -332,6 +346,7 @@ const s = StyleSheet.create({
   avatarSection: { alignItems: 'center', marginBottom: 30 },
   avatarContainer: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#fff', elevation: 4, position: 'relative' },
   avatar: { width: 100, height: 100, borderRadius: 50 },
+  avatarPlaceholder: { backgroundColor: "#E2E8F0", alignItems: "center", justifyContent: "center" },
   editIcon: { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: C.blue, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: C.bg },
   avatarHint: { fontSize: 13, color: C.muted, marginTop: 10, fontWeight: '600' },
   form: { gap: 8 },

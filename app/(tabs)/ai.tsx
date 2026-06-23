@@ -9,7 +9,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   RecordingPresets, requestRecordingPermissionsAsync,
-  setAudioModeAsync, useAudioRecorder,
+  setAudioModeAsync, useAudioRecorder, createAudioPlayer,
 } from "expo-audio";
 import * as Speech from "expo-speech";
 import { useAuth } from "../../context/AuthContext";
@@ -137,7 +137,8 @@ export default function TinyAIScreen() {
   const [isTyping,    setIsTyping]    = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [kbOpen,      setKbOpen]      = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef  = useRef<ScrollView>(null);
+  const ttsPlayerRef   = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => {
@@ -192,7 +193,7 @@ export default function TinyAIScreen() {
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     }]);
     setIsTyping(false);
-    if (reply) Speech.speak(reply, { language: detectSpeechLocale(reply), rate: 0.88, pitch: 1.0 });
+    // Chat mode: text-only — no audio playback
   };
 
   const handleMic = async () => {
@@ -232,10 +233,24 @@ export default function TinyAIScreen() {
         setIsTyping(false);
         if (reply) {
           await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-          Speech.speak(reply, { language: detectSpeechLocale(reply), rate: 0.88, pitch: 1.0 });
+          // Stop any currently playing TTS before starting a new one
+          ttsPlayerRef.current?.remove();
+          ttsPlayerRef.current = null;
+          // Try backend TTS (OpenAI "nova" voice) — fall back to device speech if unavailable
+          const ttsUri = await sathiAi.generateSpeech(reply).catch(() => null);
+          if (ttsUri) {
+            const player = createAudioPlayer({ uri: ttsUri });
+            ttsPlayerRef.current = player;
+            player.play();
+          } else {
+            Speech.speak(reply, { language: detectSpeechLocale(reply), rate: 0.88, pitch: 1.0 });
+          }
         }
       } else {
+        // Stop any in-progress TTS before recording
         Speech.stop();
+        ttsPlayerRef.current?.remove();
+        ttsPlayerRef.current = null;
         const { granted } = await requestRecordingPermissionsAsync();
         if (!granted) return Alert.alert("Permission denied", "Microphone access is required.");
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });

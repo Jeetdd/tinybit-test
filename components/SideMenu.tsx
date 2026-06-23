@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, Modal,
   ScrollView, Dimensions,
@@ -11,6 +11,8 @@ import Animated, {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import type { Language } from "../context/LanguageContext";
+import { useLanguage } from "../context/LanguageContext";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const MENU_W = SCREEN_W * 0.78;
@@ -25,43 +27,102 @@ const C = {
   border:   "#E4EBF2",
 };
 
+type SideMenuT = { [key: string]: string };
+
+const MENU_TRANSLATIONS: Partial<Record<Language, SideMenuT>> = {
+  "English": {
+    health: "Health", activities: "Activities", connect: "Connect", memory: "Memory",
+    medicine: "Medicine", dailyWellness: "Daily Wellness", healthRecords: "Health Records",
+    sathi: "Sathi", brainGames: "Brain Games", moodLift: "Mood Lift",
+    familyMessages: "Family Messages", myCalendar: "My Calendar",
+    journal: "Journal", memoryHistory: "Memory History",
+    sosEmergency: "SOS Emergency", notifications: "Notifications",
+    profileSettings: "Profile & Settings", logOut: "Log Out",
+  },
+  "हिंदी": {
+    health: "स्वास्थ्य", activities: "गतिविधियां", connect: "जोड़ें", memory: "यादें",
+    medicine: "दवाई", dailyWellness: "दैनिक स्वास्थ्य", healthRecords: "स्वास्थ्य रिकॉर्ड",
+    sathi: "साथी", brainGames: "ब्रेन गेम्स", moodLift: "मूड लिफ्ट",
+    familyMessages: "पारिवारिक संदेश", myCalendar: "मेरा कैलेंडर",
+    journal: "जर्नल", memoryHistory: "यादों का इतिहास",
+    sosEmergency: "आपातकाल", notifications: "सूचनाएं",
+    profileSettings: "प्रोफ़ाइल और सेटिंग्स", logOut: "लॉग आउट",
+  },
+  "ગુજરાતી": {
+    health: "આરોગ્ય", activities: "પ્રવૃત્તિઓ", connect: "જોડો", memory: "યાદો",
+    medicine: "દવા", dailyWellness: "દૈનિક સ્વાસ્થ્ય", healthRecords: "આરોગ્ય રેકૉર્ડ",
+    sathi: "સાથી", brainGames: "બ્રેઈન ગેમ્સ", moodLift: "મૂડ લિફ્ટ",
+    familyMessages: "પારિવારિક સંદેશ", myCalendar: "મારો કૅલેન્ડર",
+    journal: "ડાયરી", memoryHistory: "યાદોનો ઇતિહાસ",
+    sosEmergency: "કટોકટી", notifications: "સૂચનાઓ",
+    profileSettings: "પ્રોફ઼ાઇલ અને સેટિંગ", logOut: "લૉગ આઉટ",
+  },
+  "தமிழ்": {
+    health: "சுகாதாரம்", activities: "செயல்பாடுகள்", connect: "இணைப்பு", memory: "நினைவுகள்",
+    medicine: "மருந்து", dailyWellness: "தினசரி ஆரோக்கியம்", healthRecords: "சுகாதார பதிவுகள்",
+    sathi: "சாதி", brainGames: "மூளை விளையாட்டுகள்", moodLift: "மனநிலை உயர்வு",
+    familyMessages: "குடும்ப செய்திகள்", myCalendar: "என் நாட்காட்டி",
+    journal: "குறிப்பேடு", memoryHistory: "நினைவு வரலாறு",
+    sosEmergency: "அவசரநிலை", notifications: "அறிவிப்புகள்",
+    profileSettings: "சுயவிவரம் & அமைப்பு", logOut: "வெளியேறு",
+  },
+  "বাংলা": {
+    health: "স্বাস্থ্য", activities: "কার্যক্রম", connect: "সংযোগ", memory: "স্মৃতি",
+    medicine: "ওষুধ", dailyWellness: "দৈনিক সুস্থতা", healthRecords: "স্বাস্থ্য রেকর্ড",
+    sathi: "সাথি", brainGames: "ব্রেইন গেমস", moodLift: "মেজাজ উন্নতি",
+    familyMessages: "পারিবারিক বার্তা", myCalendar: "আমার ক্যালেন্ডার",
+    journal: "জার্নাল", memoryHistory: "স্মৃতির ইতিহাস",
+    sosEmergency: "জরুরী অবস্থা", notifications: "বিজ্ঞপ্তি",
+    profileSettings: "প্রোফাইল ও সেটিং", logOut: "লগ আউট",
+  },
+  "मराठी": {
+    health: "आरोग्य", activities: "उपक्रम", connect: "जोडा", memory: "आठवणी",
+    medicine: "औषध", dailyWellness: "दैनंदिन स्वास्थ्य", healthRecords: "आरोग्य नोंदी",
+    sathi: "साथी", brainGames: "ब्रेन गेम्स", moodLift: "मनःस्थिती उन्नती",
+    familyMessages: "कौटुंबिक संदेश", myCalendar: "माझे दिनदर्शिका",
+    journal: "जर्नल", memoryHistory: "आठवणींचा इतिहास",
+    sosEmergency: "आपत्कालीन", notifications: "सूचना",
+    profileSettings: "प्रोफाइल आणि सेटिंग्ज", logOut: "लॉग आउट",
+  },
+};
+
 type MenuItem = {
-  label: string;
+  key: string;
   icon: string;
   route: string;
   color: string;
   bg: string;
 };
 
-const SECTIONS: { title: string; items: MenuItem[] }[] = [
+const SECTIONS: { titleKey: string; items: MenuItem[] }[] = [
   {
-    title: "Health",
+    titleKey: "health",
     items: [
-      { label: "Medicine",       icon: "medkit-outline",            route: "/(tabs)/medicine",       color: "#F59E0B", bg: "#FFF8E7" },
-      { label: "Daily Wellness", icon: "checkmark-circle-outline",  route: "/(tabs)/daily-check-in", color: "#16A34A", bg: "#F0FFF4" },
-      { label: "Health Records", icon: "shield-checkmark-outline",  route: "/(tabs)/health-vault",   color: "#37B1E6", bg: "#EFF8FF" },
+      { key: "medicine",      icon: "medkit-outline",            route: "/(tabs)/medicine",       color: "#F59E0B", bg: "#FFF8E7" },
+      { key: "dailyWellness", icon: "checkmark-circle-outline",  route: "/(tabs)/daily-check-in", color: "#16A34A", bg: "#F0FFF4" },
+      { key: "healthRecords", icon: "shield-checkmark-outline",  route: "/(tabs)/health-vault",   color: "#37B1E6", bg: "#EFF8FF" },
     ],
   },
   {
-    title: "Activities",
+    titleKey: "activities",
     items: [
-      { label: "Sathi",       icon: "chatbubble-ellipses-outline", route: "/(tabs)/ai",       color: "#7C3AED", bg: "#F5F0FF" },
-      { label: "Brain Games", icon: "game-controller-outline",     route: "/(tabs)/mind-games",color: "#EC4899", bg: "#FFF0F8" },
-      { label: "Mood Lift",  icon: "sunny-outline",               route: "/mood-lift",        color: "#F59E0B", bg: "#FFF8E7" },
+      { key: "sathi",      icon: "chatbubble-ellipses-outline", route: "/(tabs)/ai",        color: "#7C3AED", bg: "#F5F0FF" },
+      { key: "brainGames", icon: "game-controller-outline",     route: "/(tabs)/mind-games", color: "#EC4899", bg: "#FFF0F8" },
+      { key: "moodLift",   icon: "sunny-outline",               route: "/mood-lift",         color: "#F59E0B", bg: "#FFF8E7" },
     ],
   },
   {
-    title: "Connect",
+    titleKey: "connect",
     items: [
-      { label: "Family Messages", icon: "people-outline",    route: "/(tabs)/family-messages", color: "#16A34A", bg: "#F0FFF4" },
-      { label: "My Calendar",      icon: "calendar-outline",  route: "/(tabs)/care-calendar",   color: "#37B1E6", bg: "#EFF8FF" },
+      { key: "familyMessages", icon: "people-outline",   route: "/(tabs)/family-messages", color: "#16A34A", bg: "#F0FFF4" },
+      { key: "myCalendar",     icon: "calendar-outline", route: "/(tabs)/care-calendar",   color: "#37B1E6", bg: "#EFF8FF" },
     ],
   },
   {
-    title: "Memory",
+    titleKey: "memory",
     items: [
-      { label: "Journal",        icon: "book-outline",         route: "/(tabs)/journal",    color: "#7C3AED", bg: "#F5F0FF" },
-      { label: "Memory History", icon: "time-outline",         route: "/memory-history",    color: "#EC4899", bg: "#FFF0F8" },
+      { key: "journal",       icon: "book-outline",  route: "/(tabs)/journal",  color: "#7C3AED", bg: "#F5F0FF" },
+      { key: "memoryHistory", icon: "time-outline",  route: "/memory-history",  color: "#EC4899", bg: "#FFF0F8" },
     ],
   },
 ];
@@ -77,13 +138,21 @@ interface Props {
 export default function SideMenu({ visible, onClose, userName, userEmail, onLogout }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { language } = useLanguage();
   const translateX = useSharedValue(MENU_W);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const mt = MENU_TRANSLATIONS[language] ?? MENU_TRANSLATIONS["English"]!;
 
   useEffect(() => {
-    translateX.value = withTiming(
-      visible ? 0 : MENU_W,
-      { duration: 320, easing: Easing.out(Easing.cubic) },
-    );
+    if (visible) {
+      setModalVisible(true);
+      translateX.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
+    } else {
+      translateX.value = withTiming(MENU_W, { duration: 320, easing: Easing.out(Easing.cubic) });
+      const t = setTimeout(() => setModalVisible(false), 320);
+      return () => clearTimeout(t);
+    }
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const panelStyle = useAnimatedStyle(() => ({
@@ -98,7 +167,7 @@ export default function SideMenu({ visible, onClose, userName, userEmail, onLogo
   const initials = (userName ?? "U").charAt(0).toUpperCase();
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal visible={modalVisible} transparent animationType="none" onRequestClose={onClose}>
       <View style={s.overlay}>
         {/* Dim backdrop */}
         <Pressable style={s.backdrop} onPress={onClose} />
@@ -124,7 +193,7 @@ export default function SideMenu({ visible, onClose, userName, userEmail, onLogo
             {/* SOS quick-access */}
             <Pressable style={s.sosChip} onPress={() => navigate("/(tabs)/sos")}>
               <Ionicons name="warning-outline" size={14} color={C.white} />
-              <Text style={s.sosChipText}>SOS Emergency</Text>
+              <Text style={s.sosChipText}>{mt.sosEmergency}</Text>
             </Pressable>
           </LinearGradient>
 
@@ -135,18 +204,18 @@ export default function SideMenu({ visible, onClose, userName, userEmail, onLogo
             showsVerticalScrollIndicator={false}
           >
             {SECTIONS.map((section) => (
-              <View key={section.title} style={s.section}>
-                <Text style={s.sectionTitle}>{section.title}</Text>
+              <View key={section.titleKey} style={s.section}>
+                <Text style={s.sectionTitle}>{mt[section.titleKey]}</Text>
                 {section.items.map((item) => (
                   <Pressable
-                    key={item.label}
+                    key={item.key}
                     style={s.menuItem}
                     onPress={() => navigate(item.route)}
                   >
                     <View style={[s.menuIcon, { backgroundColor: item.bg }]}>
                       <Ionicons name={item.icon as any} size={20} color={item.color} />
                     </View>
-                    <Text style={s.menuLabel}>{item.label}</Text>
+                    <Text style={s.menuLabel}>{mt[item.key]}</Text>
                     <Ionicons name="chevron-forward" size={16} color={C.muted} />
                   </Pressable>
                 ))}
@@ -161,7 +230,7 @@ export default function SideMenu({ visible, onClose, userName, userEmail, onLogo
               <View style={[s.menuIcon, { backgroundColor: "#EFF8FF" }]}>
                 <Ionicons name="notifications-outline" size={20} color="#37B1E6" />
               </View>
-              <Text style={s.menuLabel}>Notifications</Text>
+              <Text style={s.menuLabel}>{mt.notifications}</Text>
               <Ionicons name="chevron-forward" size={16} color={C.muted} />
             </Pressable>
 
@@ -170,7 +239,7 @@ export default function SideMenu({ visible, onClose, userName, userEmail, onLogo
               <View style={[s.menuIcon, { backgroundColor: "#F5F0FF" }]}>
                 <Ionicons name="person-outline" size={20} color="#7C3AED" />
               </View>
-              <Text style={s.menuLabel}>Profile & Settings</Text>
+              <Text style={s.menuLabel}>{mt.profileSettings}</Text>
               <Ionicons name="chevron-forward" size={16} color={C.muted} />
             </Pressable>
 
@@ -180,7 +249,7 @@ export default function SideMenu({ visible, onClose, userName, userEmail, onLogo
               onPress={() => { onClose(); onLogout(); }}
             >
               <Ionicons name="log-out-outline" size={20} color="#DC2626" />
-              <Text style={s.logoutText}>Log Out</Text>
+              <Text style={s.logoutText}>{mt.logOut}</Text>
             </Pressable>
           </ScrollView>
         </Animated.View>

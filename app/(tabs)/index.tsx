@@ -654,14 +654,14 @@ function ElderHomeScreen() {
             <GridItem title={ht.memoryJournal} sub="Journal & diary" color="#F97316" img={require('../../assets/images/my_memories.png')} target="/journal" />
             <GridItem title={ht.mindGames} sub="Puzzles & exercises" color="#475569" img={require('../../assets/images/brain_games.png')} target="/mind-games" />
             <GridItem title={ht.moodLift} sub="Track & boost your mood" color="#22C55E" img={require('../../assets/images/mood_lift.png')} target="/mood-lift" />
-            <GridItem title={ht.dailyCheckIn} sub="Daily health check-in" color="#A855F7" img={require('../../assets/images/daily_wellness.png')} target="/daily-health-checkin" />
+            <GridItem title={ht.dailyCheckIn} sub="Daily health check-in" color="#A855F7" img={require('../../assets/images/daily_wellness.webp')} target="/daily-health-checkin" />
           </View>
 
           {/* 6b — Health Tools Row */}
           <View style={[s.toolsGrid, { marginTop: 22 }]}>
             <ToolCard img={require('../../assets/images/weather.png')} title="Weather" sub="Clothing suggestions" color="#F59E0B" target="/weather" />
             <ToolCard img={require('../../assets/images/calorie_tracker.png')} title="Calorie Tracker" sub="Food & nutrition" color="#16A34A" target="/calorie-calculator" />
-            <ToolCard img={require('../../assets/images/help_guide.png')} title="Help & Guide" sub="Learn how to use" color="#6366F1" target="/help" />
+            <ToolCard img={require('../../assets/images/help_guide.webp')} title="Help & Guide" sub="Learn how to use" color="#6366F1" target="/help" />
           </View>
 
           {/* 7 — Record your Memory */}
@@ -896,7 +896,7 @@ const RAW_STYLES = StyleSheet.create({
     backgroundColor: C.bg,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    overflow: 'hidden',
+    // No overflow:hidden — it blocks touch/scroll events on Android
   },
   headerGradient: {
     paddingHorizontal: 20,

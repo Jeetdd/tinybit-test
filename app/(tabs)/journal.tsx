@@ -413,7 +413,7 @@ export default function JournalScreen() {
       </View>
 
       <Modal visible={isWriteModalVisible} transparent animationType="slide">
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <View style={s.modalOverlay}><View style={[s.modalContent, { backgroundColor: themeColors.card }]}>
               <View style={s.modalHeader}><Text style={[s.modalTitle, { color: themeColors.text }]}>{jt.writeMemory}</Text><TouchableOpacity onPress={() => setIsWriteModalVisible(false)}><Ionicons name="close" size={24} color={themeColors.text} /></TouchableOpacity></View>
               <TextInput style={[s.modalInput, { color: themeColors.text }]} placeholder={jt.tellYourStory} placeholderTextColor={themeColors.muted} multiline value={inputText} onChangeText={setInputText} autoFocus />

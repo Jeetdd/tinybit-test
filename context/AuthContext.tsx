@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '@supabase/supabase-js';
 
 import { buildFullName, deriveNamesFromUser, splitFullName } from '../utils/profileName';
+import { consumePendingAppleName } from '../services/oauth';
 import { supabase } from '../utils/supabase';
 import { UserPlan, DEFAULT_PLAN, fetchUserPlan } from '../services/plan';
 import { Logger } from '../utils/logger';
@@ -153,10 +154,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       const authNames = deriveNamesFromUser(authUser);
+      const appleName = consumePendingAppleName();
       const dbNames = splitFullName(data?.full_name);
-      const firstName = data?.first_name || authNames.firstName || dbNames.firstName;
-      const lastName = data?.last_name || authNames.lastName || dbNames.lastName;
-      const fullName = data?.full_name || authNames.fullName || buildFullName(firstName, lastName);
+      const firstName = data?.first_name || authNames.firstName || appleName?.firstName || dbNames.firstName;
+      const lastName = data?.last_name || authNames.lastName || appleName?.lastName || dbNames.lastName;
+      const fullName = data?.full_name || authNames.fullName || appleName?.fullName || buildFullName(firstName, lastName);
 
       // Sync fields that are available from Auth but missing in DB
       const authPhone = authUser.phone ?? null;

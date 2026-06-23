@@ -105,16 +105,18 @@ function ElderProfileScreen() {
         {/* Full Width Top Profile Cap */}
         <View style={[s.topCard, { backgroundColor: themeColors.card }]}>
           <View style={s.profileHeader}>
-            <View style={s.avatarContainer}>
-              <Image 
-                source={{ uri: profile?.avatar_url || `https://api.dicebear.com/7.x/adventurer/png?seed=${profile?.fullName || 'User'}&backgroundColor=b6e3f4` }} 
-                style={s.avatarImg} 
-                resizeMode="cover"
-              />
-              <Pressable style={s.editAvatarBtn} onPress={() => router.push("/edit-profile")}>
-                <Ionicons name="pencil" size={10} color="white" />
-              </Pressable>
-            </View>
+            <Pressable style={s.avatarContainer} onPress={() => router.push("/edit-profile")}>
+              {profile?.avatar_url ? (
+                <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} resizeMode="cover" />
+              ) : (
+                <View style={[s.avatarImg, s.avatarPlaceholder]}>
+                  <Ionicons name="person" size={34} color="#A0AEC0" />
+                </View>
+              )}
+              <View style={s.editAvatarBtn}>
+                <Ionicons name="camera" size={14} color="white" />
+              </View>
+            </Pressable>
             <View style={s.userInfo}>
               <Text style={[s.userName, { color: themeColors.text }]}>{profile?.fullName || "Update your name"}</Text>
               <Text style={[s.userDetail, { color: themeColors.muted }]}>{profile?.age || "--"} {t('years')} · {profile?.location || "Location not set"}</Text>
@@ -135,11 +137,6 @@ function ElderProfileScreen() {
             <View style={s.statCol}>
               <Text style={s.statVal}>0</Text>
               <Text style={[s.statLabel, { color: themeColors.muted }]}>{t('score')}</Text>
-            </View>
-            <View style={s.statDivider} />
-            <View style={s.statCol}>
-              <Text style={s.statVal}>5.0</Text>
-              <Text style={[s.statLabel, { color: themeColors.muted }]}>{t('rating')}</Text>
             </View>
           </View>
         </View>
@@ -190,8 +187,12 @@ function ElderProfileScreen() {
         {/* ── My Health Info ── */}
         <View style={s.sectionHeaderRow}>
           <Text style={[s.sectionTitle, { color: themeColors.text }]}>{t('myHealthInfo')}</Text>
-          <TouchableOpacity onPress={() => router.push({ pathname: "/edit-profile", params: { healthOnly: '1' } } as any)}>
-            <Ionicons name="pencil-outline" size={18} color={C.blue} />
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/edit-profile", params: { healthOnly: '1' } } as any)}
+            style={s.editHealthBtn}
+          >
+            <Ionicons name="pencil-outline" size={16} color={C.blue} />
+            <Text style={s.editHealthBtnText}>Edit</Text>
           </TouchableOpacity>
         </View>
         <View style={[s.card, { backgroundColor: themeColors.card }]}>
@@ -593,14 +594,17 @@ const RAW_STYLES = StyleSheet.create({
   profileHeader: { flexDirection: "row", alignItems: "center", marginBottom: 24 },
   avatarContainer: { marginRight: 14 },
   avatarImg: { width: 68, height: 68, borderRadius: 34, backgroundColor: "#E2E8F0" },
+  avatarPlaceholder: { alignItems: "center", justifyContent: "center" },
   editAvatarBtn: {
     position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#F45B69", 
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#2A6FAF",
+    borderWidth: 2,
+    borderColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
@@ -617,6 +621,8 @@ const RAW_STYLES = StyleSheet.create({
   statDivider: { width: 1, height: 28, backgroundColor: '#E6EBF2' },
 
   sectionHeaderRow: { marginHorizontal: 16, marginTop: 24, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  editHealthBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#EEF6FF', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#C8E4F8' },
+  editHealthBtnText: { fontSize: 13, fontWeight: '700', color: '#4AA5D9' },
   sectionTitle: { fontSize: 18, fontWeight: "900", color: C.text },
 
 

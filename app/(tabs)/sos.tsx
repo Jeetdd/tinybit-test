@@ -156,7 +156,7 @@ export default function SOSScreen() {
   const openAddModal = () => {
     setEditingIndex(null);
     setEditingContact({ name: "", role: "", initials: "", color: "#F0F4FF", phone: "" });
-    setDialCode("+91");
+    setDialCode(profileDialCode);
     setIsEditModalVisible(true);
   };
 
@@ -640,10 +640,14 @@ export default function SOSScreen() {
                 <Text style={styles.inputLabel}>{t.mobileNumber}</Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <TouchableOpacity
-                    style={[styles.input, { width: 76, alignItems: "center", justifyContent: "center" }]}
+                    style={styles.dialBtn}
                     onPress={() => setShowDialPicker(true)}
                   >
-                    <Text style={{ fontSize: 15, fontWeight: "700", color: C.text }}>{dialCode}</Text>
+                    <Text style={styles.dialFlag}>
+                      {COUNTRIES.find(c => c.dial === dialCode)?.flag ?? "🌐"}
+                    </Text>
+                    <Text style={styles.dialCode}>{dialCode}</Text>
+                    <Ionicons name="chevron-down" size={13} color={C.muted} />
                   </TouchableOpacity>
                   <TextInput
                     style={[styles.input, { flex: 1 }]}
@@ -682,17 +686,18 @@ export default function SOSScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Dial-code picker lives INSIDE this modal to prevent Android touch-event leakage */}
+              <CountryPickerModal
+                visible={showDialPicker}
+                showDial
+                onSelect={(c: Country) => { setDialCode(c.dial); setShowDialPicker(false); }}
+                onClose={() => setShowDialPicker(false)}
+              />
             </TouchableOpacity>
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
-
-      <CountryPickerModal
-        visible={showDialPicker}
-        showDial
-        onSelect={(c: Country) => { setDialCode(c.dial); setShowDialPicker(false); }}
-        onClose={() => setShowDialPicker(false)}
-      />
     </LinearGradient>
   );
 }
@@ -1126,4 +1131,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
   },
+  dialBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F5F7FA",
+    borderRadius: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "#E4EAF2",
+  },
+  dialFlag: { fontSize: 18 },
+  dialCode: { fontSize: 14, fontWeight: "700", color: C.text },
 });

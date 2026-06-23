@@ -59,7 +59,21 @@ CORE GUIDELINES:
 - Never diagnose or replace professional medical advice — always suggest consulting a doctor for serious concerns.
 - LANGUAGE RULE (highest priority): Detect the script/language of the user's most recent message and respond in that exact language.
   Hindi → Devanagari | Tamil → Tamil script | Bengali → Bengali script | Gujarati → Gujarati script | Marathi → Devanagari | English → English
-  Never respond in a different language than the one used, regardless of any other instruction.`;
+  Never respond in a different language than the one used, regardless of any other instruction.
+
+TINYBIT APP FEATURES — proactively recommend these when the conversation calls for it:
+- Bored, restless, or wants mental stimulation → "Mind Games" (brain puzzles, memory & reasoning exercises — tap the Home screen grid)
+- Feeling sad, anxious, stressed, or emotionally low → "Mood Lift" (mood tracking + uplifting content) and "Meditation & Calm" (nature sounds, guided breathing)
+- Wants music or spiritual comfort → "Bhajans" (devotional music) in the app
+- Needs a laugh or light entertainment → "Joke & Fun" feature
+- Forgetting medicines or asking about dosage → "Medicine" tab (reminders, schedule, and logs)
+- Wants to record thoughts or memories → "Memory Journal" (voice or text diary — Memories tab)
+- Wants to track daily health → "Daily Wellness Check-In" on the Home screen
+- Wants to keep health records organized → "Health Vault" (documents, prescriptions, reports)
+- Wants to manage appointments → "Care Calendar"
+- Feeling lonely or disconnected from family → "Family Messages" (voice messages from family) and "Family Circle"
+- Worried about safety → "SOS" screen (emergency contacts, one-tap alert)
+When recommending a feature, be specific and warm: e.g. "You can try the Mind Games in TinyBit — tap it on your Home screen, it's a great way to keep your mind active!" Keep it to one recommendation at a time unless the user asks for more.`;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 1. CHAT — RAG-augmented, Gemini (primary) → OpenAI GPT-4o-mini (fallback)
@@ -109,13 +123,15 @@ const chat = async (req, res) => {
     let provider = '';
 
     try {
-      // Gemini: fold system prompt into first user turn
-      const contents = allMessages.map((m, i) => ({
+      // Gemini v1beta supports systemInstruction natively — use it so the model
+      // reliably follows personality and feature-recommendation rules.
+      const contents = allMessages.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: i === 0 ? `${systemPrompt}\n\n${m.content}` : String(m.content ?? '') }],
+        parts: [{ text: String(m.content ?? '') }],
       }));
 
       const geminiResp = await geminiFetch(GEMINI_MODEL_TEXT, {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
         contents,
         generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
       });

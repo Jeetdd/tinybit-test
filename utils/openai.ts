@@ -1,4 +1,4 @@
-import { File as FSFile } from 'expo-file-system';
+import { File as FSFile, writeAsStringAsync, cacheDirectory, EncodingType } from 'expo-file-system';
 import { API_BASE_URL } from '../config/api';
 import { supabase } from './supabase';
 
@@ -78,7 +78,13 @@ export const sathiAi = {
       });
       if (!response.ok) throw new Error(await response.text());
       const json = await response.json();
-      return json?.data?.uri ?? null;
+      const base64 = json?.data?.base64;
+      if (!base64) return null;
+
+      // Write the mp3 to device cache and return a local file URI
+      const uri = `${cacheDirectory}sathi_tts_${Date.now()}.mp3`;
+      await writeAsStringAsync(uri, base64, { encoding: EncodingType.Base64 });
+      return uri;
     } catch (error: any) {
       console.error('Sathi AI speech error:', error.message);
       return null;
